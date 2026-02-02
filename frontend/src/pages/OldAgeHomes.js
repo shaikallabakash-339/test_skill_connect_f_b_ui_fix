@@ -2,362 +2,287 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import {
-  Heart, Share2, MapPin, Phone, Mail, QrCode, ArrowRight, Users,
-  Search, Filter, DollarSign, Home
-} from 'lucide-react';
+import { Upload, X, AlertCircle } from 'lucide-react';
 import '../styles/donations.css';
 
-function OldAgeHomes() {
+const OldAgeHomes = () => {
   const navigate = useNavigate();
   const [homes, setHomes] = useState([]);
-  const [filteredHomes, setFilteredHomes] = useState([]);
   const [selectedHome, setSelectedHome] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showDonateModal, setShowDonateModal] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [donationAmount, setDonationAmount] = useState('');
-  const [donorDetails, setDonorDetails] = useState({
+  const [error, setError] = useState('');
+  const [homeCount, setHomeCount] = useState(0);
+  const [transactionData, setTransactionData] = useState({
+    amount: '',
     name: '',
     email: '',
-    phone: ''
+    phone: '',
+    screenshot: null
   });
-  const [isDonating, setIsDonating] = useState(false);
+
+  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   useEffect(() => {
     fetchHomes();
   }, []);
 
   const fetchHomes = async () => {
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/old-age-homes`);
-      if (res.data.success) {
-        setHomes(res.data.data || []);
-        setFilteredHomes(res.data.data || []);
+      const response = await axios.get(`${apiUrl}/api/old-age-homes`);
+      if (response.data && response.data.data) {
+        setHomes(response.data.data);
+        setHomeCount(response.data.data.length);
+      } else {
+        setHomes([]);
+        setError('No homes available at the moment.');
       }
     } catch (err) {
-      console.error('[v0] Error fetching old-age homes:', err);
+      console.error('Error fetching homes:', err);
+      setError('Failed to load homes. Please try again later.');
+      setHomes([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = (term) => {
-    setSearchTerm(term);
-    const filtered = homes.filter(
-      (home) =>
-        home.name.toLowerCase().includes(term.toLowerCase()) ||
-        home.location?.toLowerCase().includes(term.toLowerCase())
-    );
-    setFilteredHomes(filtered);
+  const handleSelectHome = (home) => {
+    setSelectedHome(home);
+    setShowPayment(true);
+    setTransactionData({
+      amount: '',
+      name: '',
+      email: '',
+      phone: '',
+      screenshot: null
+    });
   };
 
-  const handleDonate = async (e) => {
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+    setTransactionData({ ...transactionData, screenshot: file });
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setTransactionData({ ...transactionData, [name]: value });
+  };
+
+  const handleSubmitTransaction = async (e) => {
     e.preventDefault();
-    if (!donationAmount || !donorDetails.name || !donorDetails.email) {
-      alert('Please fill all required fields');
+    
+    if (!transactionData.screenshot) {
+      alert('Please upload a transaction screenshot.');
       return;
     }
 
-    setIsDonating(true);
-    try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.post(`${apiUrl}/api/donate`, {
-        type: 'old-age',
-        item_id: selectedHome.id,
-        item_name: selectedHome.name,
-        amount: donationAmount,
-        name: donorDetails.name,
-        email: donorDetails.email,
-        phone: donorDetails.phone
-      });
+    if (!transactionData.amount || !transactionData.name || !transactionData.email || !transactionData.phone) {
+      alert('Please fill all required fields.');
+      return;
+    }
 
-      if (res.data.success) {
-        alert('Thank you for your donation! You are making a difference in their lives.');
-        setShowDonateModal(false);
-        setDonationAmount('');
-        setDonorDetails({ name: '', email: '', phone: '' });
+    const formData = new FormData();
+    formData.append('screenshot', transactionData.screenshot);
+    formData.append('type', 'old-age');
+    formData.append('item_id', selectedHome.id);
+    formData.append('item_name', selectedHome.name);
+    formData.append('amount', transactionData.amount);
+    formData.append('name', transactionData.name);
+    formData.append('email', transactionData.email);
+    formData.append('phone', transactionData.phone);
+
+    try {
+      const response = await axios.post(`${apiUrl}/api/upload-transaction`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (response.data.success) {
+        alert('Transaction submitted successfully! Thank you for your donation.');
+        setShowPayment(false);
+        setSelectedHome(null);
+        setTransactionData({
+          amount: '',
+          name: '',
+          email: '',
+          phone: '',
+          screenshot: null
+        });
+        navigate('/user-dashboard');
       }
     } catch (err) {
-      console.error('[v0] Error donating:', err);
-      alert('Failed to process donation. Please try again.');
-    } finally {
-      setIsDonating(false);
+      console.error('Error submitting transaction:', err.response?.data || err);
+      alert(`Failed to submit transaction: ${err.response?.data?.message || err.message}`);
     }
   };
 
   return (
-    <motion.div
-      className="donations-page old-age-homes-page"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      {/* Hero Section */}
-      <motion.section
-        className="hero-section"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.1 }}
-      >
-        <div className="hero-content">
-          <div className="hero-icon">
-            <Home size={80} />
-          </div>
-          <h1>Support Our Elderly</h1>
-          <p>Bring comfort, care, and dignity to senior citizens who need it most</p>
-          <div className="hero-stats">
-            <div className="stat">
-              <Users size={24} />
-              <div>
-                <h3>{homes.length}</h3>
-                <p>Active Homes</p>
-              </div>
-            </div>
-            <div className="stat">
-              <Heart size={24} />
-              <div>
-                <h3>Thousands</h3>
-                <p>Elders Supported</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.section>
+    <div className="donation-container">
+      <div className="donation-header">
+        <h1 className="title">Support Old Age Homes</h1>
+        <p className="subtitle">Help provide care and comfort to elderly in need</p>
+      </div>
 
-      {/* Search & Filter */}
-      <motion.section
-        className="search-section"
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <div className="search-container">
-          <Search size={20} className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search by name or location..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="search-input"
-          />
-          <button className="filter-button">
-            <Filter size={20} /> Filter
-          </button>
+      {loading ? (
+        <div className="loading-state">
+          <p>Loading homes...</p>
         </div>
-      </motion.section>
-
-      {/* Homes Grid */}
-      <motion.section className="grid-section">
-        {loading ? (
-          <p className="loading">Loading old-age homes...</p>
-        ) : filteredHomes.length > 0 ? (
-          <div className="homes-grid">
-            {filteredHomes.map((home, index) => (
+      ) : error ? (
+        <div className="error-state">
+          <AlertCircle size={24} />
+          <p>{error}</p>
+          <button onClick={fetchHomes} className="retry-btn">Retry</button>
+        </div>
+      ) : !showPayment ? (
+        <div className="homes-grid">
+          {homes.length > 0 ? (
+            homes.map((home) => (
               <motion.div
                 key={home.id}
                 className="home-card"
-                initial={{ opacity: 0, y: 30 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ y: -10 }}
+                whileHover={{ y: -8 }}
               >
-                {/* Image */}
-                <div className="card-image">
-                  <img
-                    src={home.image_url || 'https://via.placeholder.com/300x200?text=Old+Age+Home'}
-                    alt={home.name}
-                    className="image"
-                  />
-                  <div className="overlay">
-                    <button
-                      className="action-button donate-button"
-                      onClick={() => {
-                        setSelectedHome(home);
-                        setShowDonateModal(true);
-                      }}
-                    >
-                      <Heart size={20} /> Donate Now
-                    </button>
+                {home.home_url && (
+                  <div className="home-image-container">
+                    <img src={home.home_url} alt={home.name} className="home-image" />
                   </div>
-                </div>
-
-                {/* Card Content */}
-                <div className="card-content">
-                  <h3>{home.name}</h3>
-                  
-                  {home.description && (
-                    <p className="description">{home.description}</p>
-                  )}
-
-                  {/* Info Grid */}
-                  <div className="info-grid">
-                    {home.location && (
-                      <div className="info-item">
-                        <MapPin size={16} />
-                        <span>{home.location}</span>
-                      </div>
-                    )}
-                    {home.contact_phone && (
-                      <div className="info-item">
-                        <Phone size={16} />
-                        <span>{home.contact_phone}</span>
-                      </div>
-                    )}
-                    {home.contact_email && (
-                      <div className="info-item">
-                        <Mail size={16} />
-                        <span>{home.contact_email}</span>
-                      </div>
-                    )}
+                )}
+                <div className="home-content">
+                  <h3 className="home-name">{home.name}</h3>
+                  <div className="qr-code-container">
+                    {home.qr_url && <img src={home.qr_url} alt="UPI QR Code" className="qr-code" />}
                   </div>
-
-                  {/* QR Code */}
-                  {home.qr_url && (
-                    <div className="qr-section">
-                      <img
-                        src={home.qr_url}
-                        alt="Donation QR Code"
-                        className="qr-code"
-                        title="Scan to donate"
-                      />
-                      <p className="qr-text">Scan to donate</p>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="card-actions">
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => {
-                        setSelectedHome(home);
-                        setShowDonateModal(true);
-                      }}
-                    >
-                      <DollarSign size={18} /> Donate
-                    </button>
-                    <button className="btn btn-secondary">
-                      <Share2 size={18} /> Share
-                    </button>
-                  </div>
+                  <p className="qr-label">Scan to Donate via UPI</p>
+                  <button
+                    onClick={() => handleSelectHome(home)}
+                    className="donate-button"
+                  >
+                    Donate Now
+                  </button>
                 </div>
               </motion.div>
-            ))}
+            ))
+          ) : (
+            <div className="no-homes">
+              <p>No homes available at the moment.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <motion.div className="payment-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <div className="payment-header-close">
+            <h2 className="payment-title">Donate to {selectedHome?.name}</h2>
+            <button className="close-btn" onClick={() => setShowPayment(false)}>
+              <X size={24} />
+            </button>
           </div>
-        ) : (
-          <p className="empty-message">No old-age homes found. Try adjusting your search.</p>
-        )}
-      </motion.section>
 
-      {/* Donation Modal */}
-      {showDonateModal && selectedHome && (
-        <motion.div
-          className="modal-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          onClick={() => setShowDonateModal(false)}
-        >
-          <motion.div
-            className="modal-content"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2>Donate to {selectedHome.name}</h2>
-            <p>Help us provide care and comfort to our elderly residents</p>
+          <div className="qr-display">
+            {selectedHome?.qr_url && (
+              <img src={selectedHome.qr_url} alt="UPI QR Code" className="qr-large" />
+            )}
+            <p className="qr-instruction">Scan the QR code above using any UPI app to make payment</p>
+          </div>
 
-            <form onSubmit={handleDonate}>
-              {/* Donation Amount */}
+          <form onSubmit={handleSubmitTransaction} className="transaction-form">
+            <div className="form-group">
+              <label htmlFor="amount">Donation Amount (₹)</label>
+              <input
+                id="amount"
+                type="number"
+                name="amount"
+                placeholder="e.g., 500"
+                value={transactionData.amount}
+                onChange={handleInputChange}
+                required
+                className="input-field"
+              />
+            </div>
+
+            <div className="form-row">
               <div className="form-group">
-                <label>Donation Amount (in USD)</label>
+                <label htmlFor="name">Your Name</label>
                 <input
-                  type="number"
-                  min="1"
-                  step="0.01"
-                  value={donationAmount}
-                  onChange={(e) => setDonationAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  required
-                />
-              </div>
-
-              {/* Quick Amount Buttons */}
-              <div className="quick-amounts">
-                <button type="button" onClick={() => setDonationAmount('10')}>
-                  $10
-                </button>
-                <button type="button" onClick={() => setDonationAmount('25')}>
-                  $25
-                </button>
-                <button type="button" onClick={() => setDonationAmount('50')}>
-                  $50
-                </button>
-                <button type="button" onClick={() => setDonationAmount('100')}>
-                  $100
-                </button>
-              </div>
-
-              {/* Donor Details */}
-              <div className="form-group">
-                <label>Full Name</label>
-                <input
+                  id="name"
                   type="text"
-                  value={donorDetails.name}
-                  onChange={(e) => setDonorDetails({ ...donorDetails, name: e.target.value })}
-                  placeholder="Your name"
+                  name="name"
+                  placeholder="Full Name"
+                  value={transactionData.name}
+                  onChange={handleInputChange}
                   required
+                  className="input-field"
                 />
               </div>
-
               <div className="form-group">
-                <label>Email</label>
+                <label htmlFor="email">Email</label>
                 <input
+                  id="email"
                   type="email"
-                  value={donorDetails.email}
-                  onChange={(e) => setDonorDetails({ ...donorDetails, email: e.target.value })}
+                  name="email"
                   placeholder="your@email.com"
+                  value={transactionData.email}
+                  onChange={handleInputChange}
                   required
+                  className="input-field"
                 />
               </div>
+            </div>
 
-              <div className="form-group">
-                <label>Phone Number (Optional)</label>
-                <input
-                  type="tel"
-                  value={donorDetails.phone}
-                  onChange={(e) => setDonorDetails({ ...donorDetails, phone: e.target.value })}
-                  placeholder="Your phone number"
-                />
-              </div>
+            <div className="form-group">
+              <label htmlFor="phone">Phone Number</label>
+              <input
+                id="phone"
+                type="tel"
+                name="phone"
+                placeholder="+91 99999 99999"
+                value={transactionData.phone}
+                onChange={handleInputChange}
+                required
+                className="input-field"
+              />
+            </div>
 
-              {/* Buttons */}
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowDonateModal(false)}
-                >
-                  Cancel
-                </button>
-                <motion.button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={isDonating}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {isDonating ? 'Processing...' : 'Complete Donation'}
-                  <ArrowRight size={18} />
-                </motion.button>
-              </div>
-            </form>
-          </motion.div>
+            <div className="form-group">
+              <label htmlFor="screenshot">Payment Proof Screenshot</label>
+              <label htmlFor="screenshot-input" className="file-upload-label">
+                <Upload size={20} />
+                <p>Click to upload or drag & drop</p>
+                <small>PNG, JPG, PDF (Max 5MB)</small>
+              </label>
+              <input
+                id="screenshot-input"
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleFileChange}
+                required
+                className="file-input-hidden"
+              />
+              {transactionData.screenshot && (
+                <p className="file-selected">{transactionData.screenshot.name}</p>
+              )}
+            </div>
+
+            <div className="form-buttons">
+              <button type="submit" className="submit-button">Submit Donation Proof</button>
+              <button
+                type="button"
+                onClick={() => setShowPayment(false)}
+                className="back-button"
+              >
+                Back to List
+              </button>
+            </div>
+          </form>
         </motion.div>
       )}
-    </motion.div>
+    </div>
   );
-}
+};
 
 export default OldAgeHomes;

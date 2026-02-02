@@ -66,7 +66,7 @@ router.post('/signup', async (req, res) => {
       RETURNING id, email, fullname, company_name, status, created_at
     `;
     const values = [
-      userData.email, userData.fullname, userData.password, userData.company, userData.dob,
+      userData.email, userData.fullname, userData.password, userData.company_name, userData.dob,
       userData.city, userData.state, userData.country, userData.phone, userData.status,
       userData.qualification, userData.branch, userData.passoutyear
     ];

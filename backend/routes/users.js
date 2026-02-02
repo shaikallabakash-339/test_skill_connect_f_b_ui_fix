@@ -475,4 +475,73 @@ router.get('/all-users', async (req, res) => {
   }
 });
 
+// Upload profile photo to MinIO
+router.post('/upload-profile-photo', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const photoFile = req.files?.file;
+    if (!photoFile) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    console.log('[v0] Uploading profile photo for email:', email);
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(photoFile.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Only image files (JPEG, PNG, GIF, WebP) are allowed' });
+    }
+
+    // Check file size (less than 2MB)
+    if (photoFile.size > 2 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'File size must be less than 2MB' });
+    }
+
+    // Upload to MinIO
+    const minioResult = await uploadFile(
+      photoFile.tempFilePath,
+      `profile-${Date.now()}-${photoFile.name}`,
+      photoFile.mimetype
+    );
+
+    if (!minioResult.success) {
+      return res.status(500).json({ success: false, message: 'Error uploading photo', error: minioResult.error });
+    }
+
+    // Update user's profile_image_url in database
+    const updateQuery = `
+      UPDATE users
+      SET profile_image_url = $1, updated_at = NOW()
+      WHERE email = $2
+      RETURNING id, email, profile_image_url
+    `;
+    const updateResult = await pool.query(updateQuery, [minioResult.url, sanitizeEmail(email)]);
+
+    if (updateResult.rows.length === 0) {
+      await deleteFile(minioResult.objectName); // Clean up
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    console.log('[v0] Profile photo uploaded successfully for user:', email);
+    res.status(200).json({
+      success: true,
+      message: 'Profile photo uploaded successfully',
+      photoUrl: minioResult.url,
+      user: updateResult.rows[0]
+    });
+  } catch (err) {
+    console.error('[v0] Error uploading profile photo:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading photo',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;

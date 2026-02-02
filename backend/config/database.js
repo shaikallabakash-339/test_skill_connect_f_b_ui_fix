@@ -10,11 +10,11 @@ console.log('[v0] SSL enabled:', process.env.NODE_ENV === 'production');
 
 // Connection configuration - ALWAYS use individual env vars
 const dbConfig = {
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'admin123',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || 'postgres123',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'skill_connect_db',
+  database: process.env.DB_NAME || 'skill_connect',
   max: 20, // Maximum pool size
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000
