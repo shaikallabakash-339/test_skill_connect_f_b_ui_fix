@@ -29,6 +29,7 @@ function UserDashboard() {
   const [allUsers, setAllUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [userSearchType, setUserSearchType] = useState('name');
   const [profileUpdateMode, setProfileUpdateMode] = useState(false);
   const [updatedProfile, setUpdatedProfile] = useState({});
   const [topCompanies, setTopCompanies] = useState([]);

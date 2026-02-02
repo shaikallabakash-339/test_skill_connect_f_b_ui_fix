@@ -30,6 +30,7 @@ function AdminDashboard() {
   const [pendingSubscriptions, setPendingSubscriptions] = useState([]);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
+  const [paymentScreenshots, setPaymentScreenshots] = useState([]);
 
   // Donation-related states
   const [qrUpload, setQrUpload] = useState({ name: '', type: 'old-age', qrImage: null, homeImage: null });
