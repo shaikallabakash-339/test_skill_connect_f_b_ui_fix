@@ -31,7 +31,8 @@ function Orphans() {
   const fetchOrphans = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('http://localhost:5000/api/orphans');
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const res = await axios.get(`${apiUrl}/api/orphans`);
       if (res.data.success) {
         setOrphans(res.data.data || []);
         setFilteredOrphans(res.data.data || []);
@@ -62,7 +63,8 @@ function Orphans() {
 
     setIsDonating(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/donate', {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const res = await axios.post(`${apiUrl}/api/donate`, {
         type: 'orphan',
         item_id: selectedOrphan.id,
         item_name: selectedOrphan.name,

@@ -2,11 +2,11 @@
  * Copyright (c) 2025 Your Company Name
  * All rights reserved.
  */
-// server/routes/users.js
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/database');
 const { sanitizeEmail, sanitizeString } = require('../utils/validation');
+const { uploadFile, uploadBuffer, deleteFile, getFileUrl } = require('../utils/minio');
 const pdfParse = require('pdf-parse');
 const fs = require('fs');
 const path = require('path');
@@ -88,12 +88,13 @@ router.get('/user-stats', async (req, res) => {
   }
 });
 
+// Upload resume to MinIO and store metadata in database
 router.post('/upload-resume', async (req, res) => {
   try {
-    const { email, name } = req.body;
+    const { email } = req.body;
     
-    if (!email || !name) {
-      return res.status(400).json({ success: false, message: 'Email and name are required' });
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
     }
     
     const resumeFile = req.files?.resume;
@@ -103,55 +104,52 @@ router.post('/upload-resume', async (req, res) => {
 
     console.log('[v0] Processing resume upload for:', email);
 
-    // Check file size (less than 2MB)
-    if (resumeFile.size > 2 * 1024 * 1024) {
-      return res.status(400).json({ success: false, message: 'File size exceeds 2MB limit' });
+    // Check file size (less than 5MB)
+    if (resumeFile.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'File size exceeds 5MB limit' });
     }
 
-    // Use temporary file path provided by express-fileupload
-    const tempPath = resumeFile.tempFilePath || path.join('/tmp', 'uploads', resumeFile.name);
+    // Check file type (PDF, DOC, DOCX only)
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(resumeFile.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Only PDF and DOCX/DOC files are allowed' });
+    }
+
+    // Use temporary file path
+    const tempPath = resumeFile.tempFilePath;
     console.log('[v0] Processing file at:', tempPath);
 
-    // If file is not already saved to temp path, save it
-    if (!fs.existsSync(tempPath)) {
-      await resumeFile.mv(tempPath);
+    // Upload to MinIO
+    const minioResult = await uploadFile(tempPath, `resume-${Date.now()}-${resumeFile.name}`, resumeFile.mimetype);
+    
+    if (!minioResult.success) {
+      return res.status(500).json({ success: false, message: 'Error uploading to storage', error: minioResult.error });
     }
 
-    // Extract text from PDF
-    let resumeData = '';
-    if (resumeFile.mimetype === 'application/pdf') {
-      const dataBuffer = fs.readFileSync(tempPath);
-      const data = await pdfParse(dataBuffer);
-      resumeData = data.text;
-      console.log('[v0] PDF parsed successfully, extracted', resumeData.length, 'characters');
-    } else {
-      resumeData = 'Text extraction for this file type is not supported yet.';
+    // Get user ID
+    const userQuery = 'SELECT id FROM users WHERE email = $1';
+    const userResult = await pool.query(userQuery, [sanitizeEmail(email)]);
+    
+    if (userResult.rows.length === 0) {
+      await deleteFile(minioResult.objectName); // Clean up uploaded file
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Delete temporary file if it exists
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
-      console.log('[v0] Temporary file cleaned up');
-    }
+    const userId = userResult.rows[0].id;
 
-    // Store in PostgreSQL
+    // Store metadata in PostgreSQL
     const query = `
-      INSERT INTO resumes (email, name, resume_data, resume_filename, file_type, file_size)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (email) DO UPDATE SET 
-        name = $2, 
-        resume_data = $3,
-        resume_filename = $4,
-        file_size = $6,
-        updated_at = NOW()
-      RETURNING id, email, name, file_size, created_at
+      INSERT INTO resumes (user_id, email, name, file_name, file_type, minio_url, file_size)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, email, name, file_name, minio_url, file_size, created_at
     `;
     const result = await pool.query(query, [
+      userId,
       sanitizeEmail(email), 
-      sanitizeString(name), 
-      resumeData,
+      sanitizeString(resumeFile.name), 
       resumeFile.name,
       resumeFile.mimetype,
+      minioResult.url,
       resumeFile.size
     ]);
     
@@ -171,82 +169,307 @@ router.post('/upload-resume', async (req, res) => {
   }
 });
 
-router.get('/user-resume', async (req, res) => {
+// Get resumes for a user
+router.get('/resumes/:email', async (req, res) => {
   try {
-    const { email } = req.query;
+    const { email } = req.params;
+    
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
     
-    console.log('[v0] Fetching resume for:', email);
-    const query = 'SELECT id, email, name, resume_data, resume_filename, created_at FROM resumes WHERE email = $1';
+    console.log('[v0] Fetching resumes for:', email);
+    const query = `
+      SELECT id, name, file_name, file_type, minio_url, file_size, created_at, updated_at 
+      FROM resumes 
+      WHERE email = $1 
+      ORDER BY created_at DESC
+    `;
     const result = await pool.query(query, [sanitizeEmail(email)]);
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'No resume found for this user' });
-    }
-    
-    console.log('[v0] Resume found for:', email);
+    console.log('[v0] Found', result.rows.length, 'resumes for:', email);
     res.status(200).json({ 
       success: true, 
-      resume: result.rows[0]
+      resumes: result.rows,
+      count: result.rows.length
     });
   } catch (err) {
-    console.error('[v0] Error fetching resume:', err);
+    console.error('[v0] Error fetching resumes:', err);
     res.status(500).json({ 
       success: false, 
-      message: 'Error fetching resume',
+      message: 'Error fetching resumes',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
     });
   }
 });
 
-router.get('/resume-users', async (req, res) => {
+// Delete a specific resume
+router.delete('/resume/:resumeId', async (req, res) => {
   try {
-    console.log('[v0] Fetching all resume users');
-    const query = 'SELECT id, name, email, created_at FROM resumes ORDER BY created_at DESC';
-    const result = await pool.query(query);
+    const { resumeId } = req.params;
     
-    console.log('[v0] Found', result.rows.length, 'resume users');
-    res.status(200).json({ 
-      success: true, 
-      users: result.rows 
-    });
-  } catch (err) {
-    console.error('[v0] Error fetching resume users:', err);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching resume users',
-      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-    });
-  }
-});
+    if (!resumeId) {
+      return res.status(400).json({ success: false, message: 'Resume ID is required' });
+    }
+    
+    console.log('[v0] Deleting resume:', resumeId);
+    
+    // Get file info
+    const selectQuery = 'SELECT minio_url FROM resumes WHERE id = $1';
+    const selectResult = await pool.query(selectQuery, [resumeId]);
+    
+    if (selectResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Resume not found' });
+    }
 
-router.delete('/delete-resume', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Email is required' });
-    }
+    const minioUrl = selectResult.rows[0].minio_url;
+    const objectName = minioUrl.split('/').pop(); // Extract object name from URL
+
+    // Delete from MinIO
+    const deleteMinioResult = await deleteFile(objectName);
     
-    console.log('[v0] Deleting resume for:', email);
-    const query = 'DELETE FROM resumes WHERE email = $1 RETURNING id, email, name';
-    const result = await pool.query(query, [sanitizeEmail(email)]);
+    // Delete from database
+    const deleteQuery = 'DELETE FROM resumes WHERE id = $1 RETURNING id, name';
+    const result = await pool.query(deleteQuery, [resumeId]);
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'No resume found for this email' });
-    }
-    
-    console.log('[v0] Resume deleted for:', email);
+    console.log('[v0] Resume deleted:', resumeId);
     res.status(200).json({ 
       success: true, 
-      message: 'Resume deleted successfully' 
+      message: 'Resume deleted successfully',
+      deleteResult
     });
   } catch (err) {
     console.error('[v0] Error deleting resume:', err);
     res.status(500).json({ 
       success: false, 
       message: 'Error deleting resume',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// Get user by email with profile details
+router.get('/user/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+    
+    console.log('[v0] Fetching user:', email);
+    const query = `
+      SELECT 
+        id, email, fullname, company_name, city, state, country, 
+        phone, status, qualification, branch, passoutyear, 
+        profile_image_url, bio, is_premium, created_at, updated_at
+      FROM users 
+      WHERE email = $1
+    `;
+    const result = await pool.query(query, [sanitizeEmail(email)]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    res.status(200).json({ 
+      success: true, 
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching user:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching user',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// Update user profile
+router.put('/user/:userId/update', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { fullname, company_name, bio, city, state, country, phone, qualification, branch, passoutyear, status } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    console.log('[v0] Updating user profile:', userId);
+
+    const query = `
+      UPDATE users
+      SET 
+        fullname = COALESCE($1, fullname),
+        company_name = COALESCE($2, company_name),
+        bio = COALESCE($3, bio),
+        city = COALESCE($4, city),
+        state = COALESCE($5, state),
+        country = COALESCE($6, country),
+        phone = COALESCE($7, phone),
+        qualification = COALESCE($8, qualification),
+        branch = COALESCE($9, branch),
+        passoutyear = COALESCE($10, passoutyear),
+        status = COALESCE($11, status),
+        updated_at = NOW()
+      WHERE id = $12
+      RETURNING id, email, fullname, company_name, bio, city, state, country, phone, status, qualification, branch, passoutyear, profile_image_url, is_premium, updated_at
+    `;
+
+    const result = await pool.query(query, [
+      sanitizeString(fullname),
+      sanitizeString(company_name),
+      sanitizeString(bio),
+      sanitizeString(city),
+      sanitizeString(state),
+      sanitizeString(country),
+      sanitizeString(phone),
+      sanitizeString(qualification),
+      sanitizeString(branch),
+      sanitizeString(passoutyear),
+      sanitizeString(status),
+      userId
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    console.log('[v0] User profile updated successfully');
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error('[v0] Error updating user profile:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating profile',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// Upload profile image to MinIO
+router.post('/user/:userId/upload-profile-image', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    const imageFile = req.files?.image;
+    if (!imageFile) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
+
+    console.log('[v0] Uploading profile image for user:', userId);
+
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(imageFile.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Only image files are allowed' });
+    }
+
+    // Check file size (less than 2MB)
+    if (imageFile.size > 2 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'File size exceeds 2MB limit' });
+    }
+
+    // Upload to MinIO
+    const minioResult = await uploadFile(
+      imageFile.tempFilePath,
+      `profile-${Date.now()}-${imageFile.name}`,
+      imageFile.mimetype
+    );
+
+    if (!minioResult.success) {
+      return res.status(500).json({ success: false, message: 'Error uploading image', error: minioResult.error });
+    }
+
+    // Update user's profile_image_url
+    const updateQuery = `
+      UPDATE users
+      SET profile_image_url = $1, updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, profile_image_url
+    `;
+    const updateResult = await pool.query(updateQuery, [minioResult.url, userId]);
+
+    if (updateResult.rows.length === 0) {
+      await deleteFile(minioResult.objectName); // Clean up
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    console.log('[v0] Profile image uploaded successfully');
+    res.status(200).json({
+      success: true,
+      message: 'Profile image uploaded successfully',
+      profileImageUrl: minioResult.url
+    });
+  } catch (err) {
+    console.error('[v0] Error uploading profile image:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading image',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// Get all users for browsing/searching
+router.get('/all-users', async (req, res) => {
+  try {
+    const { search, status, company } = req.query;
+
+    console.log('[v0] Fetching all users with filters');
+
+    let query = `
+      SELECT 
+        id, email, fullname, company_name, city, status,
+        qualification, profile_image_url, bio, is_premium, created_at
+      FROM users
+      WHERE 1=1
+    `;
+    const values = [];
+    let paramCount = 0;
+
+    if (search) {
+      paramCount++;
+      query += ` AND (fullname ILIKE $${paramCount} OR company_name ILIKE $${paramCount})`;
+      values.push(`%${sanitizeString(search)}%`);
+    }
+
+    if (status) {
+      paramCount++;
+      query += ` AND status = $${paramCount}`;
+      values.push(sanitizeString(status));
+    }
+
+    if (company) {
+      paramCount++;
+      query += ` AND company_name ILIKE $${paramCount}`;
+      values.push(`%${sanitizeString(company)}%`);
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT 100`;
+
+    const result = await pool.query(query, values);
+
+    console.log('[v0] Found', result.rows.length, 'users');
+    res.status(200).json({
+      success: true,
+      users: result.rows,
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching users:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching users',
       error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
     });
   }

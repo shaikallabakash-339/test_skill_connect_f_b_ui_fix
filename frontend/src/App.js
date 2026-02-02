@@ -14,6 +14,7 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import OldAgeHomes from './pages/OldAgeHomes';
 import Orphans from './pages/Orphans';
+import Premium from './pages/Premium';
 import Navbar from './components/Navbar';
 import './styles/App.css';
 import './styles/toast.css';
@@ -33,6 +34,7 @@ function App() {
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/old-age-homes" element={<OldAgeHomes />} />
           <Route path="/orphans" element={<Orphans />} />
+          <Route path="/premium" element={<Premium />} />
         </Routes>
       </div>
     </Router>

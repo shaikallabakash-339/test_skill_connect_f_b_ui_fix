@@ -31,7 +31,8 @@ function OldAgeHomes() {
   const fetchHomes = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('http://localhost:5000/api/old-age-homes');
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const res = await axios.get(`${apiUrl}/api/old-age-homes`);
       if (res.data.success) {
         setHomes(res.data.data || []);
         setFilteredHomes(res.data.data || []);
@@ -62,7 +63,8 @@ function OldAgeHomes() {
 
     setIsDonating(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/donate', {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const res = await axios.post(`${apiUrl}/api/donate`, {
         type: 'old-age',
         item_id: selectedHome.id,
         item_name: selectedHome.name,

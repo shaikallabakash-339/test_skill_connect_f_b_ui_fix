@@ -12,7 +12,7 @@ function Signup() {
     email: '',
     fullName: '',
     password: '',
-    company: '',
+    company_name: '',
     phone: '',
     city: '',
     state: '',
@@ -125,7 +125,7 @@ function Signup() {
     step2: [
       { name: 'phone', type: 'tel', placeholder: '+1 (555) 123-4567', label: 'Phone Number', icon: Phone },
       { name: 'city', type: 'text', placeholder: 'New York', label: 'City', icon: MapPin },
-      { name: 'company', type: 'text', placeholder: 'Your Company (Optional)', label: 'Company', icon: Briefcase },
+      { name: 'company_name', type: 'text', placeholder: 'Your Company (Optional)', label: 'Company Name', icon: Briefcase },
       { name: 'dob', type: 'date', label: 'Date of Birth', icon: Calendar, required: true },
       { name: 'state', type: 'text', placeholder: 'NY', label: 'State' },
       { name: 'country', type: 'text', placeholder: 'USA', label: 'Country' },

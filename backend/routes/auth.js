@@ -12,7 +12,7 @@ const { validateSignupData, validateLoginData, sanitizeEmail, sanitizeString } =
 router.post('/signup', async (req, res) => {
   console.log('[v0] Signup request received');
   
-  const { email, fullName, password, company, dob, city, state, country, phone, status, qualification, branch, passoutYear } = req.body;
+  const { email, fullName, password, company_name, dob, city, state, country, phone, status, qualification, branch, passoutYear } = req.body;
 
   try {
     // Validate input data
@@ -47,7 +47,7 @@ router.post('/signup', async (req, res) => {
       email: sanitizedEmail,
       fullname: sanitizedFullName,
       password: hashedPassword,
-      company: company ? sanitizeString(company) : null,
+      company_name: company_name ? sanitizeString(company_name) : null,
       dob: dob || null,
       city: city ? sanitizeString(city) : null,
       state: state ? sanitizeString(state) : null,
@@ -61,9 +61,9 @@ router.post('/signup', async (req, res) => {
 
     console.log('[v0] Attempting to insert user data into PostgreSQL');
     const query = `
-      INSERT INTO users (email, fullname, password, company, dob, city, state, country, phone, status, qualification, branch, passoutyear)
+      INSERT INTO users (email, fullname, password, company_name, dob, city, state, country, phone, status, qualification, branch, passoutyear)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING id, email, fullname, company, status, created_at
+      RETURNING id, email, fullname, company_name, status, created_at
     `;
     const values = [
       userData.email, userData.fullname, userData.password, userData.company, userData.dob,

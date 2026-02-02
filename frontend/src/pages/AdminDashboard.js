@@ -99,10 +99,10 @@ function AdminDashboard() {
   const fetchUsers = async () => {
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/users`);
-      if (Array.isArray(res.data)) {
-        setUsers(res.data);
-        setDashboardStats(prev => ({ ...prev, totalUsers: res.data.length }));
+      const res = await axios.get(`${apiUrl}/api/all-users`);
+      if (res.data && res.data.users && Array.isArray(res.data.users)) {
+        setUsers(res.data.users);
+        setDashboardStats(prev => ({ ...prev, totalUsers: res.data.users.length }));
       }
     } catch (err) {
       console.error('[v0] Error fetching users:', err);
