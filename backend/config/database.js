@@ -325,7 +325,7 @@ const initTables = async () => {
 
     // Create indexes
     await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
-    await pool.query('CREATE INDEX IF NOT EXISTS idx_users_company ON users(company)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_users_company_name ON users(company_name)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_category ON messages(category)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_resumes_email ON resumes(email)');

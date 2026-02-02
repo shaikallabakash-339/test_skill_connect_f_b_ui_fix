@@ -1,0 +1,129 @@
+# ⚡ QUICK REFERENCE CARD
+
+## 🚀 START APPLICATION (30 SECONDS)
+```bash
+cd /workspaces/test_skill_connect_f_b_ui_fix
+docker-compose up -d
+sleep 15
+```
+
+## 🌐 ACCESS SERVICES
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:5000 |
+| Database | localhost:5432 |
+| MinIO Storage | http://localhost:9001 |
+| Mailpit Email | http://localhost:8025 |
+
+## 🧪 TEST SIGNUP (Copy & Paste)
+```bash
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "fullName": "Test User",
+    "password": "Test@123456",
+    "phone": "1234567890",
+    "status": "employed",
+    "company_name": "Tech Co"
+  }'
+```
+
+## ✅ VERIFY DATA IN DATABASE
+```bash
+docker-compose exec postgres psql -U postgres -d skill_connect \
+  -c "SELECT email, fullname, company_name FROM users;"
+```
+
+## 🛑 STOP APPLICATION
+```bash
+docker-compose down
+```
+
+## 🔄 FULL RESET (If needed)
+```bash
+docker-compose down -v
+docker-compose up -d
+sleep 15
+```
+
+## 📊 CHECK STATUS
+```bash
+docker-compose ps
+```
+
+## 📝 VIEW LOGS
+```bash
+docker-compose logs -f backend
+```
+
+## 🧹 CLEAN UP EVERYTHING
+```bash
+docker-compose down -v --remove-orphans
+docker system prune -f
+```
+
+---
+
+## 🔑 DEFAULT CREDENTIALS
+- **Admin Email:** admin@skillconnect.com
+- **Admin Password:** admin123
+
+---
+
+## 📁 KEY FILES
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Container configuration |
+| `backend/server.js` | API server |
+| `frontend/src/App.js` | React app |
+| `backend/routes/auth.js` | Authentication |
+| `backend/scripts/init-db.sql` | Database schema |
+
+---
+
+## ✨ WHAT'S FIXED
+✅ Database column mismatch (`company` → `company_name`)  
+✅ Backend routes using correct column names  
+✅ Index creation fixed  
+✅ Docker health checks fixed  
+✅ CSS styling verified  
+✅ Signup fully functional  
+
+---
+
+## 🎯 COMMON ISSUES & FIXES
+
+### Signup not working?
+```bash
+docker-compose down -v && docker-compose up -d && sleep 15
+```
+
+### Port already in use?
+```bash
+lsof -i :5000  # Find process
+kill -9 <PID>   # Kill it
+```
+
+### No connection to database?
+```bash
+docker-compose logs postgres
+docker-compose restart postgres
+```
+
+### CSS not showing?
+- Hard refresh: Ctrl+Shift+R
+- Clear browser cache
+- Restart frontend: `docker-compose restart frontend`
+
+---
+
+## 📚 FULL DOCUMENTATION
+- See `FINAL_STATUS_REPORT.md` for complete details
+- See `SETUP_AND_RUN_GUIDE.md` for full setup guide
+- See `DOCKER_AND_DATABASE_FIXES.md` for troubleshooting
+
+---
+
+**Everything is ready! Start using your app now! 🎉**

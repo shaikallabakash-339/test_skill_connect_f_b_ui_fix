@@ -55,11 +55,7 @@ services:
       - skill_connect_network
     environment:
       MP_MAX_MESSAGES: 5000
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8025/api/v1/database"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
 
   # -------- NODE BACKEND --------
   backend:

@@ -16,7 +16,7 @@ router.get('/users', async (req, res) => {
     console.log('[v0] Fetching all users');
     const result = await pool.query(`
       SELECT 
-        id, email, fullname, company, city, state, country, status, 
+        id, email, fullname, company_name, city, state, country, status, 
         qualification, branch, passoutyear, created_at
       FROM users 
       ORDER BY created_at DESC
