@@ -67,7 +67,7 @@ function AdminDashboard() {
       return;
     }
     fetchAllData();
-  }, [navigate]);
+  }, [navigate, fetchAllData]);
 
   // User-related functions
   const fetchUsers = async () => {

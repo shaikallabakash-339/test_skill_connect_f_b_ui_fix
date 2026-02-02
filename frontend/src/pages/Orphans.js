@@ -12,7 +12,6 @@ const Orphans = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [orphanCount, setOrphanCount] = useState(0);
   const [transactionData, setTransactionData] = useState({
     amount: '',
     name: '',
@@ -23,10 +22,6 @@ const Orphans = () => {
 
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-  useEffect(() => {
-    fetchOrphans();
-  }, []);
-
   const fetchOrphans = async () => {
     setLoading(true);
     setError('');
@@ -34,7 +29,6 @@ const Orphans = () => {
       const response = await axios.get(`${apiUrl}/api/orphans`);
       if (response.data && response.data.data) {
         setOrphans(response.data.data);
-        setOrphanCount(response.data.data.length);
       } else {
         setOrphans([]);
         setError('No orphanages available at the moment.');
@@ -47,6 +41,10 @@ const Orphans = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchOrphans();
+  }, []);
 
   const handleSelectOrphan = (orphan) => {
     setSelectedOrphan(orphan);

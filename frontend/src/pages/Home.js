@@ -2,15 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  ArrowRight, Users, Briefcase, Target, MessageSquare, Shield, Zap,
-  Globe, Award, CheckCircle, Star, TrendingUp, Rocket
+  ArrowRight, Users, Briefcase, MessageSquare, Shield, Zap,
+  Globe, CheckCircle, Star, Rocket
 } from 'lucide-react';
 import Footer from '../components/Footer';
 import '../styles/home.css';
 
 function Home() {
   const navigate = useNavigate();
-  const [emailInput, setEmailInput] = useState('');
 
   const containerVariants = {
     hidden: { opacity: 0 },

@@ -12,7 +12,6 @@ const OldAgeHomes = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [homeCount, setHomeCount] = useState(0);
   const [transactionData, setTransactionData] = useState({
     amount: '',
     name: '',
@@ -23,10 +22,6 @@ const OldAgeHomes = () => {
 
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-  useEffect(() => {
-    fetchHomes();
-  }, []);
-
   const fetchHomes = async () => {
     setLoading(true);
     setError('');
@@ -34,7 +29,6 @@ const OldAgeHomes = () => {
       const response = await axios.get(`${apiUrl}/api/old-age-homes`);
       if (response.data && response.data.data) {
         setHomes(response.data.data);
-        setHomeCount(response.data.data.length);
       } else {
         setHomes([]);
         setError('No homes available at the moment.');
@@ -47,6 +41,10 @@ const OldAgeHomes = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchHomes();
+  }, []);
 
   const handleSelectHome = (home) => {
     setSelectedHome(home);
