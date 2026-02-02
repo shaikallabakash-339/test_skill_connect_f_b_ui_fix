@@ -87,17 +87,23 @@ services:
       DATABASE_URL: postgres://postgres:postgres123@postgres:5432/skill_connect
       
       # MinIO Configuration
+      MINIO_HOST: minio
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: false
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin@123456
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin@123456
       MINIO_BUCKET: skill-connect-bucket
+      MINIO_API_URL: http://localhost:9000
       
       # Email Configuration - Mailpit (Local Testing)
       MAILPIT_HOST: mailpit
       MAILPIT_PORT: 1025
       MAILPIT_SMTP: mailpit:1025
+      EMAIL_USER: test@skillconnect.com
+      EMAIL_PASS: test
       
       # SendPulse Configuration (optional - comment out if not using)
       SENDPULSE_API_KEY: 
@@ -105,11 +111,21 @@ services:
       
       # JWT
       JWT_SECRET: your_jwt_secret_key_change_in_production
+      JWT_EXPIRY: 24h
+      
+      # Frontend URL
+      FRONTEND_URL: http://localhost:3000
     volumes:
       - ./backend:/app
       - /app/node_modules
     networks:
       - skill_connect_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # -------- FRONTEND --------
   frontend:
@@ -119,7 +135,8 @@ services:
     container_name: skill_connect_frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
@@ -133,6 +150,12 @@ services:
       - ./frontend/public:/app/public
     networks:
       - skill_connect_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   pgdata:

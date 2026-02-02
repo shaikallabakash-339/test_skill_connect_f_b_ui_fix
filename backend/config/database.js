@@ -90,7 +90,7 @@ const initTables = async () => {
         email TEXT UNIQUE NOT NULL,
         fullname TEXT NOT NULL,
         password TEXT NOT NULL,
-        company TEXT,
+        company_name TEXT,
         dob TEXT,
         city TEXT,
         state TEXT,

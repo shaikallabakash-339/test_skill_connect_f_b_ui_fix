@@ -15,7 +15,7 @@ const adminRoutes = require("./routes/admin")
 const donationRoutes = require("./routes/donations")
 const subscriptionRoutes = require("./routes/subscriptions")
 const { initializeBuckets } = require("./utils/minioService")
-const { pool, testConnection } = require("./config/database")
+const { pool, testConnection, initTables } = require("./config/database")
 require("dotenv").config()
 
 const app = express()

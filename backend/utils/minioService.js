@@ -7,7 +7,7 @@
 const Minio = require('minio');
 const path = require('path');
 const fs = require('fs');
-const pool = require('../config/db');
+const { pool } = require('../config/database');
 
 // Initialize MinIO client
 const minioClient = new Minio.Client({
