@@ -258,7 +258,7 @@ router.post('/admin/reject/:subscriptionId', async (req, res) => {
   }
 });
 
-// Admin: Get all subscriptions
+// Get all subscriptions
 router.get('/admin/all', async (req, res) => {
   try {
     const { status } = req.query;
@@ -290,6 +290,187 @@ router.get('/admin/all', async (req, res) => {
       message: 'Error fetching subscriptions',
       error: err.message
     });
+  }
+});
+
+// NEW: Get subscription plans with pricing
+router.get('/plans-detailed', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, name, price, currency, period, max_conversations, description, is_active
+      FROM subscription_plans 
+      WHERE is_active = true 
+      ORDER BY price ASC
+    `);
+
+    res.json({
+      success: true,
+      plans: result.rows.map(plan => ({
+        ...plan,
+        priceFormatted: `${plan.currency} ${plan.price}`,
+        features: plan.name.includes('Monthly') 
+          ? ['Unlimited messaging', 'Priority support'] 
+          : ['Unlimited messaging', 'Priority support', 'Annual savings']
+      }))
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching plans:', err);
+    res.status(500).json({ success: false, message: 'Error fetching plans', error: err.message });
+  }
+});
+
+// NEW: Upgrade user to premium
+router.post('/upgrade', async (req, res) => {
+  try {
+    const { userId, planId, paymentScreenshotUrl } = req.body;
+
+    if (!userId || !planId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and Plan ID are required'
+      });
+    }
+
+    // Verify user exists
+    const userResult = await pool.query(
+      'SELECT id, email, fullname FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Verify plan exists
+    const planResult = await pool.query(
+      'SELECT * FROM subscription_plans WHERE id = $1 AND is_active = true',
+      [planId]
+    );
+
+    if (planResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Plan not found' });
+    }
+
+    const plan = planResult.rows[0];
+    const user = userResult.rows[0];
+
+    // Create subscription record
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + (plan.period === 'year' ? 12 : 1));
+
+    const subResult = await pool.query(
+      `INSERT INTO user_subscriptions (user_id, plan_id, payment_screenshot_url, status, is_approved, start_date, end_date, approved_at)
+       VALUES ($1, $2, $3, 'active', true, $4, $5, NOW())
+       RETURNING *`,
+      [userId, planId, paymentScreenshotUrl, startDate, endDate]
+    );
+
+    // Update user to premium
+    await pool.query('UPDATE users SET is_premium = true WHERE id = $1', [userId]);
+
+    // Log transaction
+    await pool.query(
+      `INSERT INTO payment_records (user_id, plan_id, amount, status, screenshot_url, created_at)
+       VALUES ($1, $2, $3, 'completed', $4, NOW())`,
+      [userId, planId, plan.price, paymentScreenshotUrl]
+    );
+
+    res.json({
+      success: true,
+      message: 'Premium upgrade successful!',
+      subscription: {
+        id: subResult.rows[0].id,
+        plan: plan.name,
+        price: plan.price,
+        startDate: startDate,
+        endDate: endDate,
+        userEmail: user.email
+      }
+    });
+  } catch (err) {
+    console.error('[v0] Error upgrading to premium:', err);
+    res.status(500).json({ success: false, message: 'Error processing upgrade', error: err.message });
+  }
+});
+
+// NEW: Check if user is premium
+router.get('/check-premium/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const result = await pool.query(
+      `SELECT us.*, sp.name, sp.price, sp.period
+       FROM user_subscriptions us
+       JOIN subscription_plans sp ON us.plan_id = sp.id
+       WHERE us.user_id = $1 AND us.status = 'active' AND us.end_date > NOW()
+       ORDER BY us.end_date DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: true,
+        isPremium: false,
+        message: 'User does not have active premium subscription'
+      });
+    }
+
+    const subscription = result.rows[0];
+    res.json({
+      success: true,
+      isPremium: true,
+      subscription: {
+        plan: subscription.name,
+        price: subscription.price,
+        period: subscription.period,
+        endDate: subscription.end_date,
+        daysRemaining: Math.ceil((new Date(subscription.end_date) - new Date()) / (1000 * 60 * 60 * 24))
+      }
+    });
+  } catch (err) {
+    console.error('[v0] Error checking premium:', err);
+    res.status(500).json({ success: false, message: 'Error checking premium status' });
+  }
+});
+
+// NEW: Cancel premium subscription
+router.post('/cancel/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Find active subscription
+    const subResult = await pool.query(
+      'SELECT id FROM user_subscriptions WHERE user_id = $1 AND status = \'active\' LIMIT 1',
+      [userId]
+    );
+
+    if (subResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'No active subscription found' });
+    }
+
+    // Cancel subscription (set end date to now)
+    await pool.query(
+      'UPDATE user_subscriptions SET status = \'cancelled\', end_date = NOW() WHERE id = $1',
+      [subResult.rows[0].id]
+    );
+
+    // Check if user has other active subscriptions
+    const otherSubs = await pool.query(
+      'SELECT id FROM user_subscriptions WHERE user_id = $1 AND status = \'active\' AND end_date > NOW()',
+      [userId]
+    );
+
+    // If no other active subscriptions, remove premium status
+    if (otherSubs.rows.length === 0) {
+      await pool.query('UPDATE users SET is_premium = false WHERE id = $1', [userId]);
+    }
+
+    res.json({ success: true, message: 'Premium subscription cancelled' });
+  } catch (err) {
+    console.error('[v0] Error cancelling subscription:', err);
+    res.status(500).json({ success: false, message: 'Error cancelling subscription' });
   }
 });
 

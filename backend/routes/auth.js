@@ -8,6 +8,7 @@ const router = express.Router();
 const { pool } = require('../config/database');
 const { hashPassword, comparePassword, validatePasswordStrength } = require('../utils/password');
 const { validateSignupData, validateLoginData, sanitizeEmail, sanitizeString } = require('../utils/validation');
+const { sendWelcomeEmail } = require('../utils/sendpulseServiceEnhanced');
 
 router.post('/signup', async (req, res) => {
   console.log('[v0] Signup request received');
@@ -88,6 +89,15 @@ router.post('/signup', async (req, res) => {
     
     console.log('[v0] User registered successfully:', newUser.email);
     
+    // Send welcome email via SendPulse
+    try {
+      const welcomeEmail = await sendWelcomeEmail(newUser.email, newUser.fullname);
+      console.log('[v0] Welcome email sent:', welcomeEmail);
+    } catch (emailErr) {
+      console.warn('[v0] Failed to send welcome email:', emailErr.message);
+      // Don't fail signup if email fails
+    }
+    
     res.status(201).json({ 
       success: true, 
       message: 'User registered successfully', 
@@ -95,6 +105,7 @@ router.post('/signup', async (req, res) => {
         id: newUser.id,
         email: newUser.email,
         fullName: newUser.fullname,
+        company_name: newUser.company_name,
         status: newUser.status,
         createdAt: newUser.created_at
       }

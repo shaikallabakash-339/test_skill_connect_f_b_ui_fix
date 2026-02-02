@@ -153,11 +153,223 @@ router.get('/message-stats', async (req, res) => {
 });
 
 /**
- * USER-TO-USER MESSAGE ROUTES - Real-time chat
+ * USER-TO-USER MESSAGE ROUTES - Real-time chat (Email-based for frontend)
  */
 
-// Send message to another user
-router.post('/user-message/send', async (req, res) => {
+// Send message (email-based - for frontend)
+router.post('/send-message', async (req, res) => {
+  const { sender_email, receiver_email, message, timestamp } = req.body;
+
+  try {
+    if (!sender_email || !receiver_email || !message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sender email, receiver email, and message are required'
+      });
+    }
+
+    // Get sender ID
+    const senderQuery = `SELECT id, is_premium FROM users WHERE email = $1`;
+    const senderResult = await pool.query(senderQuery, [sender_email]);
+    
+    if (senderResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Sender not found' });
+    }
+
+    const senderId = senderResult.rows[0].id;
+    const senderData = senderResult.rows[0];
+
+    // Get receiver ID
+    const receiverQuery = `SELECT id FROM users WHERE email = $1`;
+    const receiverResult = await pool.query(receiverQuery, [receiver_email]);
+
+    if (receiverResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Receiver not found' });
+    }
+
+    const receiverId = receiverResult.rows[0].id;
+
+    // Check conversation limit for free users
+    if (!senderData.is_premium) {
+      const conversationQuery = `
+        SELECT COUNT(DISTINCT contact_id) as conversation_count
+        FROM conversations
+        WHERE user_id = $1 AND is_active = true
+      `;
+      const conversationResult = await pool.query(conversationQuery, [senderId]);
+      const conversationCount = parseInt(conversationResult.rows[0].conversation_count) || 0;
+
+      // Check if this is a new contact
+      const existingConversationQuery = `
+        SELECT id FROM conversations
+        WHERE user_id = $1 AND contact_id = $2
+      `;
+      const existingResult = await pool.query(existingConversationQuery, [senderId, receiverId]);
+
+      if (existingResult.rows.length === 0 && conversationCount >= 5) {
+        return res.status(403).json({
+          success: false,
+          message: 'You have reached the maximum number of chats (5). Upgrade to premium to chat with more users.',
+          currentChats: conversationCount,
+          limit: 5
+        });
+      }
+    }
+
+    // Insert message
+    const messageQuery = `
+      INSERT INTO user_messages (sender_id, receiver_id, message, is_read, timestamp)
+      VALUES ($1, $2, $3, false, NOW())
+      RETURNING id, created_at
+    `;
+    const messageResult = await pool.query(messageQuery, [senderId, receiverId, sanitizeString(message)]);
+
+    // Update or create conversation
+    const conversationQuery = `
+      INSERT INTO conversations (user_id, contact_id, last_message, last_message_time, is_active)
+      VALUES ($1, $2, $3, NOW(), true)
+      ON CONFLICT (user_id, contact_id) DO UPDATE SET
+        last_message = $3,
+        last_message_time = NOW(),
+        is_active = true
+      RETURNING id
+    `;
+    await pool.query(conversationQuery, [senderId, receiverId, sanitizeString(message)]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Message sent successfully',
+      messageId: messageResult.rows[0].id,
+      createdAt: messageResult.rows[0].created_at
+    });
+  } catch (err) {
+    console.error('[v0] Error sending user message:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error sending message',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// Get messages between two users (email-based)
+router.get('/messages/:sender_email/:receiver_email', async (req, res) => {
+  const { sender_email, receiver_email } = req.params;
+
+  try {
+    // Get user IDs
+    const senderQuery = `SELECT id FROM users WHERE email = $1`;
+    const senderResult = await pool.query(senderQuery, [sender_email]);
+
+    const receiverQuery = `SELECT id FROM users WHERE email = $1`;
+    const receiverResult = await pool.query(receiverQuery, [receiver_email]);
+
+    if (senderResult.rows.length === 0 || receiverResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const senderId = senderResult.rows[0].id;
+    const receiverId = receiverResult.rows[0].id;
+
+    const query = `
+      SELECT id, sender_id, receiver_id, sender_email, receiver_email, message, is_read, timestamp
+      FROM user_messages
+      WHERE (sender_id = $1 AND receiver_id = $2) 
+         OR (sender_id = $2 AND receiver_id = $1)
+      ORDER BY timestamp ASC
+      LIMIT 100
+    `;
+
+    const result = await pool.query(query, [senderId, receiverId]);
+
+    // Mark messages as read
+    const updateQuery = `
+      UPDATE user_messages
+      SET is_read = true
+      WHERE receiver_id = $1 AND sender_id = $2 AND is_read = false
+    `;
+    await pool.query(updateQuery, [senderId, receiverId]);
+
+    res.status(200).json({
+      success: true,
+      messages: result.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching messages:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching messages',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+// Get all conversations for a user (email-based)
+router.get('/conversations/:user_email', async (req, res) => {
+  const { user_email } = req.params;
+
+  try {
+    // Get user ID
+    const userQuery = `SELECT id FROM users WHERE email = $1`;
+    const userResult = await pool.query(userQuery, [user_email]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const userId = userResult.rows[0].id;
+
+    const query = `
+      SELECT 
+        c.id,
+        c.contact_id,
+        c.user_id,
+        u.fullname,
+        u.email,
+        u.profile_image_url,
+        u.company_name,
+        c.last_message,
+        c.last_message_time,
+        c.is_active
+      FROM conversations c
+      JOIN users u ON c.contact_id = u.id
+      WHERE c.user_id = $1 AND c.is_active = true
+      ORDER BY c.last_message_time DESC
+    `;
+
+    const result = await pool.query(query, [userId]);
+
+    res.status(200).json({
+      success: true,
+      conversations: result.rows.map(conv => ({
+        id: conv.id,
+        other_user_id: conv.contact_id,
+        other_user: {
+          id: conv.contact_id,
+          fullname: conv.fullname,
+          email: conv.email,
+          profile_image_url: conv.profile_image_url,
+          company_name: conv.company_name
+        },
+        last_message: conv.last_message,
+        last_message_time: conv.last_message_time,
+        is_active: conv.is_active
+      })),
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching conversations:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching conversations',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * EXISTING USER-TO-USER MESSAGE ROUTES - (Keep for backward compatibility)
+ *
   const { senderId, receiverId, message } = req.body;
 
   try {

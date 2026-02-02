@@ -10,9 +10,11 @@ const path = require("path")
 const authRoutes = require("./routes/auth")
 const userRoutes = require("./routes/users")
 const messageRoutes = require("./routes/messages")
-const uploadRoutes = require("./routes/admin")
+const uploadRoutes = require("./routes/uploads")
+const adminRoutes = require("./routes/admin")
 const donationRoutes = require("./routes/donations")
 const subscriptionRoutes = require("./routes/subscriptions")
+const { initializeBuckets } = require("./utils/minioService")
 const { pool, testConnection } = require("./config/database")
 require("dotenv").config()
 
@@ -57,6 +59,7 @@ app.use("/api", authRoutes)
 app.use("/api", userRoutes)
 app.use("/api", messageRoutes)
 app.use("/api", uploadRoutes)
+app.use("/api", adminRoutes)
 app.use("/api", donationRoutes)
 app.use("/api/subscriptions", subscriptionRoutes)
 
@@ -97,6 +100,14 @@ app.get('/api/ready', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+  
+  // Initialize MinIO buckets
+  try {
+    await initializeBuckets();
+    console.log('✓ MinIO buckets initialized');
+  } catch (err) {
+    console.error('Error initializing MinIO:', err);
+  }
 });

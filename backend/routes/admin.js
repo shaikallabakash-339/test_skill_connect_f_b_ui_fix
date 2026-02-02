@@ -303,4 +303,276 @@ router.get("/activities", async (req, res) => {
   }
 });
 
+// NEW: Get comprehensive dashboard statistics
+router.get('/dashboard/stats', async (req, res) => {
+  try {
+    // Total users
+    const usersResult = await pool.query('SELECT COUNT(*) as total FROM users');
+    const totalUsers = parseInt(usersResult.rows[0].total);
+
+    // Users by status
+    const statusResult = await pool.query(`
+      SELECT status, COUNT(*) as count FROM users GROUP BY status
+    `);
+    const usersByStatus = {};
+    statusResult.rows.forEach(row => {
+      usersByStatus[row.status] = parseInt(row.count);
+    });
+
+    // Premium users
+    const premiumResult = await pool.query('SELECT COUNT(*) as total FROM users WHERE is_premium = true');
+    const premiumUsers = parseInt(premiumResult.rows[0].total);
+
+    // Active conversations
+    const conversationsResult = await pool.query('SELECT COUNT(DISTINCT user_id) as total FROM conversations WHERE is_active = true');
+    const activeConversations = parseInt(conversationsResult.rows[0].total);
+
+    // Total messages
+    const messagesResult = await pool.query('SELECT COUNT(*) as total FROM user_messages');
+    const totalMessages = parseInt(messagesResult.rows[0].total);
+
+    // Total donations
+    const donationsResult = await pool.query('SELECT COUNT(*) as total, SUM(amount) as totalAmount FROM donations');
+    const totalDonations = parseInt(donationsResult.rows[0].total);
+    const donationAmount = parseFloat(donationsResult.rows[0].totalamount || 0);
+
+    // Total resumes
+    const resumesResult = await pool.query('SELECT COUNT(*) as total FROM resumes');
+    const totalResumes = parseInt(resumesResult.rows[0].total);
+
+    // Active subscriptions
+    const subscriptionsResult = await pool.query(`
+      SELECT COUNT(*) as total FROM user_subscriptions 
+      WHERE status = 'active' AND end_date > NOW()
+    `);
+    const activeSubscriptions = parseInt(subscriptionsResult.rows[0].total);
+
+    res.json({
+      success: true,
+      stats: {
+        totalUsers,
+        premiumUsers,
+        activeConversations,
+        totalMessages,
+        totalDonations,
+        donationAmount,
+        totalResumes,
+        activeSubscriptions,
+        usersByStatus
+      }
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching dashboard stats:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching statistics',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Get user growth over time
+router.get('/dashboard/growth', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as newUsers,
+        SUM(CASE WHEN is_premium THEN 1 ELSE 0 END) as newPremium
+      FROM users
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching growth data:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching growth data'
+    });
+  }
+});
+
+// NEW: Get message statistics
+router.get('/dashboard/messages', async (req, res) => {
+  try {
+    // Messages by category
+    const categoryResult = await pool.query(`
+      SELECT category, COUNT(*) as count FROM messages GROUP BY category
+    `);
+
+    // Message delivery stats
+    const deliveryResult = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN is_read THEN 1 ELSE 0 END) as read
+      FROM user_messages
+    `);
+
+    const delivery = deliveryResult.rows[0];
+
+    res.json({
+      success: true,
+      messagesByCategory: categoryResult.rows,
+      deliveryStats: {
+        total: parseInt(delivery.total),
+        read: parseInt(delivery.read),
+        unread: parseInt(delivery.total) - parseInt(delivery.read),
+        readPercentage: delivery.total > 0 ? Math.round((parseInt(delivery.read) / parseInt(delivery.total)) * 100) : 0
+      }
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching message stats:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching message statistics'
+    });
+  }
+});
+
+// NEW: Get pending subscriptions for approval
+router.get('/dashboard/pending-subscriptions', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        us.id,
+        us.user_id,
+        u.email,
+        u.fullname,
+        sp.name as plan_name,
+        sp.price,
+        us.payment_screenshot_url,
+        us.created_at
+      FROM user_subscriptions us
+      JOIN users u ON us.user_id = u.id
+      JOIN subscription_plans sp ON us.plan_id = sp.id
+      WHERE us.status = 'pending' OR us.is_approved = false
+      ORDER BY us.created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      pending: result.rows,
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching pending subscriptions:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching pending subscriptions'
+    });
+  }
+});
+
+// NEW: Get donation statistics
+router.get('/dashboard/donations', async (req, res) => {
+  try {
+    // Total donation stats
+    const totalsResult = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(amount) as totalAmount,
+        AVG(amount) as averageAmount
+      FROM donations
+    `);
+
+    const totals = totalsResult.rows[0];
+
+    // Donations by category
+    const categoryResult = await pool.query(`
+      SELECT category, COUNT(*) as count, SUM(amount) as total
+      FROM donations
+      GROUP BY category
+    `);
+
+    res.json({
+      success: true,
+      totals: {
+        count: parseInt(totals.total),
+        amount: parseFloat(totals.totalamount || 0),
+        average: parseFloat(totals.averageamount || 0)
+      },
+      byCategory: categoryResult.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching donation stats:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching donation statistics'
+    });
+  }
+});
+
+// NEW: Get company-wise user distribution
+router.get('/dashboard/companies', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        company_name,
+        COUNT(*) as userCount,
+        SUM(CASE WHEN is_premium THEN 1 ELSE 0 END) as premiumCount
+      FROM users
+      WHERE company_name IS NOT NULL
+      GROUP BY company_name
+      ORDER BY userCount DESC
+      LIMIT 20
+    `);
+
+    res.json({
+      success: true,
+      companies: result.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching company distribution:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching company distribution'
+    });
+  }
+});
+
+// NEW: Get recent system activities
+router.get('/dashboard/recent-activities', async (req, res) => {
+  try {
+    // Recent users
+    const usersResult = await pool.query(`
+      SELECT id, email, fullname, status, created_at FROM users
+      ORDER BY created_at DESC LIMIT 10
+    `);
+
+    // Recent subscriptions
+    const subsResult = await pool.query(`
+      SELECT us.id, u.email, sp.name as plan, us.created_at
+      FROM user_subscriptions us
+      JOIN users u ON us.user_id = u.id
+      JOIN subscription_plans sp ON us.plan_id = sp.id
+      ORDER BY us.created_at DESC LIMIT 10
+    `);
+
+    // Recent donations
+    const donationsResult = await pool.query(`
+      SELECT id, donor_name, amount, category, created_at FROM donations
+      ORDER BY created_at DESC LIMIT 10
+    `);
+
+    res.json({
+      success: true,
+      recentUsers: usersResult.rows,
+      recentSubscriptions: subsResult.rows,
+      recentDonations: donationsResult.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching activities:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching recent activities'
+    });
+  }
+});
+
 module.exports = router;
