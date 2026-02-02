@@ -39,6 +39,17 @@ function AdminDashboard() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  // Database Tables State
+  const [databaseTables, setDatabaseTables] = useState([]);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [tableData, setTableData] = useState([]);
+
+  // Announcements State
+  const [announcement, setAnnouncement] = useState({ title: '', message: '' });
+
+  // Subscription QR State
+  const [subscriptionQr, setSubscriptionQr] = useState({ monthly: null, yearly: null });
+
   const navigate = useNavigate();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,6 +62,7 @@ function AdminDashboard() {
         fetchMessageStats(),
         fetchData(),
         fetchPendingSubscriptions(),
+        fetchDatabaseTables(),
       ]);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -113,6 +125,17 @@ function AdminDashboard() {
       }
     } catch (err) {
       console.error('Error fetching subscriptions:', err);
+    }
+  };
+
+  const fetchDatabaseTables = async () => {
+    try {
+      const res = await axios.get(`${apiUrl}/api/admin/database-tables`);
+      if (res.data.success) {
+        setDatabaseTables(res.data.tables || []);
+      }
+    } catch (err) {
+      console.error('Error fetching database tables:', err);
     }
   };
 
@@ -277,6 +300,57 @@ function AdminDashboard() {
     return stat ? parseFloat(stat.total_amount).toFixed(2) : '0.00';
   };
 
+  const handleViewTable = async (tableName) => {
+    try {
+      const res = await axios.get(`${apiUrl}/api/admin/table-data/${tableName}`);
+      if (res.data.success) {
+        setSelectedTable(tableName);
+        setTableData(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching table data:', err);
+      alert('Failed to fetch table data');
+    }
+  };
+
+  const handleSubscriptionQrUpload = async (type, file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('qrImage', file);
+    formData.append('type', type);
+
+    try {
+      const res = await axios.post(`${apiUrl}/api/upload-subscription-qr`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      if (res.data.success) {
+        setSubscriptionQr({ ...subscriptionQr, [type]: res.data.url });
+        alert('QR code uploaded successfully!');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Failed to upload QR code');
+    }
+  };
+
+  const handleSendAnnouncement = async () => {
+    if (!announcement.title || !announcement.message) {
+      alert('Please fill both title and message');
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${apiUrl}/api/send-announcement`, announcement);
+      if (res.data.success) {
+        alert('Announcement sent successfully!');
+        setAnnouncement({ title: '', message: '' });
+      }
+    } catch (err) {
+      console.error('Error sending announcement:', err);
+      alert('Failed to send announcement');
+    }
+  };
+
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
@@ -321,6 +395,12 @@ function AdminDashboard() {
           Dashboard
         </button>
         <button
+          className={`tab-btn ${activeTab === 'database' ? 'active' : ''}`}
+          onClick={() => setActiveTab('database')}
+        >
+          Database Tables
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'messaging' ? 'active' : ''}`}
           onClick={() => setActiveTab('messaging')}
         >
@@ -331,6 +411,18 @@ function AdminDashboard() {
           onClick={() => setActiveTab('subscriptions')}
         >
           Premium ({pendingSubscriptions.length})
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'subscription-qr' ? 'active' : ''}`}
+          onClick={() => setActiveTab('subscription-qr')}
+        >
+          Subscription QR
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'announcements' ? 'active' : ''}`}
+          onClick={() => setActiveTab('announcements')}
+        >
+          Announcements
         </button>
         <button
           className={`tab-btn ${activeTab === 'donations' ? 'active' : ''}`}
@@ -614,6 +706,100 @@ function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Database Tables Tab */}
+          {activeTab === 'database' && (
+            <div className="database-section">
+              <h3>Database Tables</h3>
+              <div className="tables-list">
+                {databaseTables.length > 0 ? (
+                  databaseTables.map((table, idx) => (
+                    <motion.div key={idx} className="table-item" whileHover={{ y: -2 }}>
+                      <h4>{table.name}</h4>
+                      <p>{table.description}</p>
+                      <button onClick={() => handleViewTable(table.name)}>View Data</button>
+                    </motion.div>
+                  ))
+                ) : (
+                  <p>No tables found</p>
+                )}
+              </div>
+              {selectedTable && tableData.length > 0 && (
+                <div className="table-data">
+                  <h4>Data from {selectedTable}</h4>
+                  <div className="table-wrapper">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          {Object.keys(tableData[0]).map((key, idx) => (
+                            <th key={idx}>{key}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tableData.map((row, idx) => (
+                          <tr key={idx}>
+                            {Object.values(row).map((value, i) => (
+                              <td key={i}>{String(value)}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Subscription QR Tab */}
+          {activeTab === 'subscription-qr' && (
+            <div className="subscription-qr-section">
+              <h3>Upload Subscription QR Codes</h3>
+              <div className="qr-upload-forms">
+                <div className="qr-form">
+                  <h4>Monthly Premium (₹100)</h4>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleSubscriptionQrUpload('monthly', e.target.files[0])}
+                  />
+                  {subscriptionQr.monthly && <img src={subscriptionQr.monthly} alt="Monthly QR" style={{ maxWidth: '200px' }} />}
+                </div>
+                <div className="qr-form">
+                  <h4>Yearly Premium (₹1000)</h4>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleSubscriptionQrUpload('yearly', e.target.files[0])}
+                  />
+                  {subscriptionQr.yearly && <img src={subscriptionQr.yearly} alt="Yearly QR" style={{ maxWidth: '200px' }} />}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Announcements Tab */}
+          {activeTab === 'announcements' && (
+            <div className="announcements-section">
+              <h3>Send Announcements</h3>
+              <div className="announcement-form">
+                <input
+                  type="text"
+                  placeholder="Announcement Title"
+                  value={announcement.title}
+                  onChange={(e) => setAnnouncement({ ...announcement, title: e.target.value })}
+                />
+                <textarea
+                  placeholder="Announcement Message"
+                  value={announcement.message}
+                  onChange={(e) => setAnnouncement({ ...announcement, message: e.target.value })}
+                  rows={6}
+                />
+                <button onClick={handleSendAnnouncement}>Send Announcement</button>
               </div>
             </div>
           )}

@@ -575,4 +575,179 @@ router.get('/dashboard/recent-activities', async (req, res) => {
   }
 });
 
+// Get database tables
+router.get('/database-tables', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT table_name as name, 
+             CASE 
+               WHEN table_name = 'users' THEN 'User accounts and profiles'
+               WHEN table_name = 'messages' THEN 'User messages and conversations'
+               WHEN table_name = 'notifications' THEN 'System notifications'
+               WHEN table_name = 'resumes' THEN 'User resume files'
+               WHEN table_name = 'donations' THEN 'Donation transactions'
+               WHEN table_name = 'user_subscriptions' THEN 'Premium subscriptions'
+               WHEN table_name = 'subscription_plans' THEN 'Subscription plan details'
+               WHEN table_name = 'old_age_homes' THEN 'Old age home information'
+               WHEN table_name = 'orphans' THEN 'Orphanage information'
+               ELSE 'System table'
+             END as description
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('users', 'messages', 'notifications', 'resumes', 'donations', 'user_subscriptions', 'subscription_plans', 'old_age_homes', 'orphans')
+      ORDER BY table_name
+    `);
+    res.json({
+      success: true,
+      tables: result.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching database tables:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching database tables',
+      error: err.message
+    });
+  }
+});
+
+// Get table data
+router.get('/table-data/:tableName', async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    const allowedTables = ['users', 'messages', 'notifications', 'resumes', 'donations', 'user_subscriptions', 'subscription_plans', 'old_age_homes', 'orphans'];
+    
+    if (!allowedTables.includes(tableName)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid table name'
+      });
+    }
+
+    const result = await pool.query(`SELECT * FROM ${tableName} LIMIT 100`);
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching table data:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching table data',
+      error: err.message
+    });
+  }
+});
+
+// Upload subscription QR
+router.post('/upload-subscription-qr', async (req, res) => {
+  try {
+    if (!req.files || !req.files.qrImage) {
+      return res.status(400).json({
+        success: false,
+        message: 'No QR image uploaded'
+      });
+    }
+
+    const { type } = req.body;
+    if (!['monthly', 'yearly'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid subscription type'
+      });
+    }
+
+    const file = req.files.qrImage;
+    const fileName = `subscription-qr-${type}-${Date.now()}.png`;
+    
+    // Upload to MinIO
+    const uploadResult = await uploadFile(file, fileName, 'subscription-qrs');
+    
+    if (uploadResult.success) {
+      // Update or insert QR URL
+      await pool.query(
+        `INSERT INTO subscription_qrs (type, qr_url) 
+         VALUES ($1, $2) 
+         ON CONFLICT (type) 
+         DO UPDATE SET qr_url = EXCLUDED.qr_url, updated_at = NOW()`,
+        [type, uploadResult.url]
+      );
+
+      res.json({
+        success: true,
+        message: 'Subscription QR uploaded successfully',
+        url: uploadResult.url
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload QR image'
+      });
+    }
+  } catch (err) {
+    console.error('[v0] Error uploading subscription QR:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading subscription QR',
+      error: err.message
+    });
+  }
+});
+
+// Send announcement
+router.post('/send-announcement', async (req, res) => {
+  try {
+    const { title, message } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({
+        success: false,
+        message: 'Title and message are required'
+      });
+    }
+
+    // Insert announcement
+    const announcementResult = await pool.query(
+      'INSERT INTO announcements (title, message) VALUES ($1, $2) RETURNING id',
+      [title, message]
+    );
+
+    const announcementId = announcementResult.rows[0].id;
+
+    // Send to all users
+    const usersResult = await pool.query('SELECT id FROM users');
+    const userIds = usersResult.rows.map(u => u.id);
+
+    for (const userId of userIds) {
+      await pool.query(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)',
+        [userId, title, message, 'announcement']
+      );
+    }
+
+    // Send email notifications via SendPulse
+    const emailService = require('../utils/sendpulseService');
+    const emails = usersResult.rows.map(u => u.email);
+    
+    try {
+      await emailService.sendAnnouncement(emails, title, message);
+    } catch (emailErr) {
+      console.error('[v0] Email sending failed:', emailErr);
+      // Don't fail the whole request if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Announcement sent successfully to all users'
+    });
+  } catch (err) {
+    console.error('[v0] Error sending announcement:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error sending announcement',
+      error: err.message
+    });
+  }
+});
+
 module.exports = router;

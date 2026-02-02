@@ -128,6 +128,51 @@ CREATE TABLE IF NOT EXISTS email_logs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Subscription Plans
+CREATE TABLE IF NOT EXISTS subscription_plans (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  price DECIMAL(10, 2) NOT NULL,
+  duration_months INTEGER NOT NULL,
+  max_conversations INTEGER DEFAULT -1,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- User Subscriptions
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id UUID NOT NULL REFERENCES subscription_plans(id),
+  payment_screenshot_url TEXT,
+  transaction_proof TEXT,
+  status TEXT DEFAULT 'pending',
+  is_approved BOOLEAN DEFAULT false,
+  start_date TIMESTAMP,
+  end_date TIMESTAMP,
+  approved_by UUID,
+  approved_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Subscription QR Codes
+CREATE TABLE IF NOT EXISTS subscription_qrs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  type TEXT UNIQUE NOT NULL,
+  qr_url TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Announcements
+CREATE TABLE IF NOT EXISTS announcements (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
@@ -141,3 +186,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 CREATE INDEX IF NOT EXISTS idx_email_logs_user ON email_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_logs_created ON email_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_user ON user_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_status ON user_subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_subscription_qrs_type ON subscription_qrs(type);
+CREATE INDEX IF NOT EXISTS idx_announcements_created ON announcements(created_at);

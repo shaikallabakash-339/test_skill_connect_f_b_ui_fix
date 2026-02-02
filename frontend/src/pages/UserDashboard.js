@@ -42,6 +42,10 @@ function UserDashboard() {
   const [isPremium, setIsPremium] = useState(false);
   const [showPremiumWarning, setShowPremiumWarning] = useState(false);
   const [conversationCount, setConversationCount] = useState(0);
+  const [peopleSearch, setPeopleSearch] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
+  const [suggestedConnections, setSuggestedConnections] = useState([]);
+  const [adminMessages, setAdminMessages] = useState([]);
 
   // Notifications Tab State
   const [notifications, setNotifications] = useState([]);
@@ -146,6 +150,22 @@ function UserDashboard() {
     setFilteredUsers(filtered);
   }, [searchQuery, userSearchType, allUsers]);
 
+  // Search for people and companies in messages
+  useEffect(() => {
+    if (peopleSearch.trim()) {
+      const query = peopleSearch.toLowerCase();
+      const filtered = allUsers.filter(u => u.fullname?.toLowerCase().includes(query) && u.email !== user?.email);
+      setSuggestedConnections(filtered);
+    } else if (companySearch.trim()) {
+      const query = companySearch.toLowerCase();
+      const companies = [...new Set(allUsers.map(u => u.company_name).filter(Boolean))].filter(c => c.toLowerCase().includes(query));
+      const filtered = allUsers.filter(u => companies.includes(u.company_name) && u.email !== user?.email);
+      setSuggestedConnections(filtered);
+    } else {
+      setSuggestedConnections([]);
+    }
+  }, [peopleSearch, companySearch, allUsers, user]);
+
   const fetchConversations = useCallback(async (userEmail) => {
     try {
       const res = await axios.get(`${apiUrl}/api/conversations/${userEmail}`);
@@ -177,6 +197,9 @@ function UserDashboard() {
         setNotifications(res.data.notifications);
         const unread = res.data.notifications.filter(n => !n.is_read).length;
         setUnreadCount(unread);
+        // Separate admin messages
+        const adminMsgs = res.data.notifications.filter(n => n.type === 'admin_message');
+        setAdminMessages(adminMsgs);
       }
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -565,114 +588,197 @@ function UserDashboard() {
           {activeTab === 'messages' && (
             <motion.div className="messages-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="messages-container">
-                {/* Conversations Sidebar */}
-                <div className="conversations-sidebar">
-                  <h3>Active Conversations</h3>
-                  <div className="search-container" style={{ marginBottom: '10px' }}>
+                {/* Search Bars */}
+                <div className="message-search-section">
+                  <div className="search-container" style={{ marginBottom: '10px', flex: 1 }}>
                     <Search size={18} />
-                    <input type="text" placeholder="Search conversations..." />
+                    <input
+                      type="text"
+                      placeholder="Search people by name..."
+                      value={peopleSearch}
+                      onChange={(e) => { setPeopleSearch(e.target.value); setCompanySearch(''); }}
+                    />
                   </div>
-
-                  {!isPremium && conversationCount >= 5 && (
-                    <div className="upgrade-prompt">
-                      <Zap size={16} /> Upgrade for more chats
-                    </div>
-                  )}
-
-                  <div className="conversations-list">
-                    {conversations.length > 0 ? (
-                      conversations.map((conv) => (
-                        <motion.div
-                          key={conv.other_user_id}
-                          className={`conversation-item ${selectedUser?.id === conv.other_user_id ? 'active' : ''}`}
-                          onClick={() => handleSelectUser(conv.other_user)}
-                          whileHover={{ x: 5 }}
-                        >
-                          {conv.other_user?.profile_image_url ? (
-                            <img src={conv.other_user.profile_image_url} alt={conv.other_user?.fullname} />
-                          ) : (
-                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <User size={20} color="#4f46e5" />
-                            </div>
-                          )}
-                          <div className="conv-info">
-                            <h4>{conv.other_user?.fullname}</h4>
-                            <p>{conv.last_message || 'No messages yet'}</p>
-                          </div>
-                        </motion.div>
-                      ))
-                    ) : (
-                      <p style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
-                        No conversations yet. Start from Home tab!
-                      </p>
-                    )}
+                  <div className="search-container" style={{ marginBottom: '10px', flex: 1 }}>
+                    <Search size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search companies to suggest connections..."
+                      value={companySearch}
+                      onChange={(e) => { setCompanySearch(e.target.value); setPeopleSearch(''); }}
+                    />
                   </div>
                 </div>
 
-                {/* Chat Area */}
-                <div className="chat-area">
-                  {selectedUser ? (
-                    <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
-                        {selectedUser.profile_image_url ? (
-                          <img src={selectedUser.profile_image_url} alt={selectedUser.fullname} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <User size={20} color="#4f46e5" />
+                {/* Suggested Connections */}
+                {suggestedConnections.length > 0 && (
+                  <div className="suggested-connections">
+                    <h4>Suggested Connections</h4>
+                    <div className="users-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                      {suggestedConnections.slice(0, 6).map((u) => (
+                        <motion.div key={u.id} className="user-card" whileHover={{ y: -4 }} style={{ padding: '10px' }}>
+                          {u.profile_image_url ? (
+                            <img src={u.profile_image_url} alt={u.fullname} className="user-avatar" style={{ width: '40px', height: '40px' }} />
+                          ) : (
+                            <div className="user-avatar" style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff' }}>
+                              <User size={20} color="#4f46e5" />
+                            </div>
+                          )}
+                          <h3 style={{ fontSize: '14px', margin: '5px 0' }}>{u.fullname}</h3>
+                          <p className="company" style={{ fontSize: '12px' }}>{u.company_name}</p>
+                          <button
+                            className="message-btn"
+                            onClick={() => { handleSelectUser(u); setSuggestedConnections([]); setPeopleSearch(''); setCompanySearch(''); }}
+                            style={{ fontSize: '12px', padding: '5px 10px' }}
+                          >
+                            <MessageSquare size={14} /> Message
+                          </button>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Messages Sections */}
+                <div className="messages-sections">
+                  {/* Admin Messages */}
+                  <div className="admin-messages-section">
+                    <h3>Admin Messages</h3>
+                    <div className="admin-messages-list">
+                      {adminMessages.length > 0 ? (
+                        adminMessages.map((msg, idx) => (
+                          <motion.div key={idx} className="admin-message-item" whileHover={{ x: 5 }}>
+                            <div className="icon admin">
+                              <Bell size={20} />
+                            </div>
+                            <div className="content">
+                              <h4>{msg.title}</h4>
+                              <p>{msg.message}</p>
+                              <div className="time">{new Date(msg.timestamp).toLocaleString()}</div>
+                            </div>
+                          </motion.div>
+                        ))
+                      ) : (
+                        <p>No admin messages</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* User Messages */}
+                  <div className="user-messages-section">
+                    <h3>User Messages</h3>
+                    <div className="messages-container">
+                      {/* Conversations Sidebar */}
+                      <div className="conversations-sidebar">
+                        <h4>Active Conversations</h4>
+                        <div className="search-container" style={{ marginBottom: '10px' }}>
+                          <Search size={18} />
+                          <input type="text" placeholder="Search conversations..." />
+                        </div>
+
+                        {!isPremium && conversationCount >= 5 && (
+                          <div className="upgrade-prompt">
+                            <Zap size={16} /> Upgrade for more chats
                           </div>
                         )}
-                        <div>
-                          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{selectedUser.fullname}</h3>
-                          <p style={{ margin: 0, fontSize: '12px', color: '#999' }}>{selectedUser.company_name}</p>
+
+                        <div className="conversations-list">
+                          {conversations.length > 0 ? (
+                            conversations.map((conv) => (
+                              <motion.div
+                                key={conv.other_user_id}
+                                className={`conversation-item ${selectedUser?.id === conv.other_user_id ? 'active' : ''}`}
+                                onClick={() => handleSelectUser(conv.other_user)}
+                                whileHover={{ x: 5 }}
+                              >
+                                {conv.other_user?.profile_image_url ? (
+                                  <img src={conv.other_user.profile_image_url} alt={conv.other_user?.fullname} />
+                                ) : (
+                                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <User size={20} color="#4f46e5" />
+                                  </div>
+                                )}
+                                <div className="conv-info">
+                                  <h4>{conv.other_user?.fullname}</h4>
+                                  <p>{conv.last_message || 'No messages yet'}</p>
+                                </div>
+                              </motion.div>
+                            ))
+                          ) : (
+                            <p style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                              No conversations yet. Start from Home tab!
+                            </p>
+                          )}
                         </div>
                       </div>
 
-                      <div className="messages-list">
-                        {messages.map((msg, idx) => (
-                          <motion.div
-                            key={idx}
-                            className={`message ${msg.sender_email === user?.email ? 'sent' : 'received'}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                          >
-                            <p>{msg.message}</p>
-                            <small>{new Date(msg.timestamp).toLocaleTimeString()}</small>
-                          </motion.div>
-                        ))}
-                        <div ref={messagesEndRef} />
+                      {/* Chat Area */}
+                      <div className="chat-area">
+                        {selectedUser ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+                              {selectedUser.profile_image_url ? (
+                                <img src={selectedUser.profile_image_url} alt={selectedUser.fullname} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                              ) : (
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <User size={20} color="#4f46e5" />
+                                </div>
+                              )}
+                              <div>
+                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{selectedUser.fullname}</h3>
+                                <p style={{ margin: 0, fontSize: '12px', color: '#999' }}>{selectedUser.company_name}</p>
+                              </div>
+                            </div>
+
+                            <div className="messages-list">
+                              {messages.map((msg, idx) => (
+                                <motion.div
+                                  key={idx}
+                                  className={`message ${msg.sender_email === user?.email ? 'sent' : 'received'}`}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                >
+                                  <p>{msg.message}</p>
+                                  <small>{new Date(msg.timestamp).toLocaleTimeString()}</small>
+                                </motion.div>
+                              ))}
+                              <div ref={messagesEndRef} />
+                            </div>
+
+                            {showPremiumWarning && (
+                              <div style={{ background: '#fef3c7', padding: '12px', borderRadius: '8px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <p style={{ margin: 0, fontSize: '13px' }}>⭐ Free users limited to 5 conversations</p>
+                                <button
+                                  onClick={() => setShowPremiumWarning(false)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            )}
+
+                            <form onSubmit={handleSendMessage} className="message-input-area">
+                              <input
+                                type="text"
+                                placeholder="Type a message..."
+                                value={messageInput}
+                                onChange={(e) => setMessageInput(e.target.value)}
+                                disabled={!isPremium && conversationCount >= 5}
+                              />
+                              <button type="submit" disabled={!isPremium && conversationCount >= 5}>
+                                <Send size={18} />
+                              </button>
+                            </form>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
+                            <MessageSquare size={48} />
+                            <p>Select a conversation to start chatting</p>
+                          </div>
+                        )}
                       </div>
-
-                      {showPremiumWarning && (
-                        <div style={{ background: '#fef3c7', padding: '12px', borderRadius: '8px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <p style={{ margin: 0, fontSize: '13px' }}>⭐ Free users limited to 5 conversations</p>
-                          <button
-                            onClick={() => setShowPremiumWarning(false)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      )}
-
-                      <form onSubmit={handleSendMessage} className="message-input-area">
-                        <input
-                          type="text"
-                          placeholder="Type a message..."
-                          value={messageInput}
-                          onChange={(e) => setMessageInput(e.target.value)}
-                          disabled={!isPremium && conversationCount >= 5}
-                        />
-                        <button type="submit" disabled={!isPremium && conversationCount >= 5}>
-                          <Send size={18} />
-                        </button>
-                      </form>
-                    </>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
-                      <MessageSquare size={48} />
-                      <p>Select a conversation to start chatting</p>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </motion.div>
