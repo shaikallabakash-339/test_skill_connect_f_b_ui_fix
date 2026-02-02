@@ -20,7 +20,8 @@ const dbConfig = {
   connectionTimeoutMillis: 5000
 };
 
-dbConfig.ssl = process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false;
+// Disable SSL as database doesn't support it
+dbConfig.ssl = false;
 
 console.log('[v0] Database config:', {
   host: dbConfig.host,
