@@ -750,4 +750,321 @@ router.post('/send-announcement', async (req, res) => {
   }
 });
 
+// NEW: Approve subscription request
+router.post('/subscriptions/approve/:subscriptionId', async (req, res) => {
+  try {
+    const { subscriptionId } = req.params;
+    const { adminId } = req.body;
+
+    console.log('[v0] Approving subscription:', subscriptionId);
+
+    const result = await pool.query(`
+      UPDATE user_subscriptions 
+      SET is_approved = true, status = 'active', approved_by = $1, approved_at = NOW(),
+          start_date = NOW(), end_date = NOW() + INTERVAL '30 days'
+      WHERE id = $2
+      RETURNING user_id, plan_id
+    `, [adminId || '00000000-0000-0000-0000-000000000000', subscriptionId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Subscription not found' });
+    }
+
+    const { user_id } = result.rows[0];
+
+    // Update user as premium
+    await pool.query('UPDATE users SET is_premium = true WHERE id = $1', [user_id]);
+
+    // Create notification
+    await pool.query(
+      'INSERT INTO notifications (user_id, title, message, notification_type) VALUES ($1, $2, $3, $4)',
+      [user_id, 'Premium Subscription Approved', 'Your premium subscription has been approved! You now have unlimited messaging.', 'subscription_approved']
+    );
+
+    res.json({
+      success: true,
+      message: 'Subscription approved successfully',
+      userId: user_id
+    });
+  } catch (err) {
+    console.error('[v0] Error approving subscription:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error approving subscription',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Reject subscription request
+router.post('/subscriptions/reject/:subscriptionId', async (req, res) => {
+  try {
+    const { subscriptionId } = req.params;
+    const { reason } = req.body;
+
+    console.log('[v0] Rejecting subscription:', subscriptionId);
+
+    const result = await pool.query(`
+      UPDATE user_subscriptions 
+      SET status = 'rejected', rejection_reason = $1
+      WHERE id = $2
+      RETURNING user_id
+    `, [reason || 'Payment verification failed', subscriptionId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Subscription not found' });
+    }
+
+    const { user_id } = result.rows[0];
+
+    // Create notification
+    await pool.query(
+      'INSERT INTO notifications (user_id, title, message, notification_type) VALUES ($1, $2, $3, $4)',
+      [user_id, 'Subscription Request Rejected', `Your subscription request has been rejected. Reason: ${reason || 'Payment verification failed'}`, 'subscription_rejected']
+    );
+
+    res.json({
+      success: true,
+      message: 'Subscription rejected successfully'
+    });
+  } catch (err) {
+    console.error('[v0] Error rejecting subscription:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error rejecting subscription',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Verify user resumes
+router.get('/resumes', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT r.*, u.fullname, u.email
+      FROM resumes r
+      JOIN users u ON r.email = u.email
+      ORDER BY r.created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      resumes: result.rows,
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching resumes:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching resumes',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Mark user as premium
+router.post('/users/mark-premium/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const result = await pool.query(
+      'UPDATE users SET is_premium = true WHERE id = $1 RETURNING id, email',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'User marked as premium',
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error('[v0] Error marking user as premium:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error marking user as premium',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Get notifications statistics
+router.get('/notifications-stats', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN is_read THEN 1 ELSE 0 END) as read,
+        SUM(CASE WHEN NOT is_read THEN 1 ELSE 0 END) as unread,
+        notification_type,
+        COUNT(*) as count
+      FROM notifications
+      GROUP BY notification_type
+    `);
+
+    res.json({
+      success: true,
+      stats: result.rows
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching notification stats:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching notification statistics',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Get all orphanages
+router.get('/orphanages', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM orphans ORDER BY created_at DESC');
+    res.json({
+      success: true,
+      orphanages: result.rows,
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching orphanages:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching orphanages',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Add/Update orphanage
+router.post('/orphanages', async (req, res) => {
+  try {
+    const { id, name, description, location, imageUrl, qrUrl, contactEmail, contactPhone } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Name is required' });
+    }
+
+    if (id) {
+      // Update
+      const result = await pool.query(`
+        UPDATE orphans 
+        SET name = $1, description = $2, location = $3, image_url = $4, qr_url = $5, contact_email = $6, contact_phone = $7, updated_at = NOW()
+        WHERE id = $8
+        RETURNING *
+      `, [name, description, location, imageUrl, qrUrl, contactEmail, contactPhone, id]);
+
+      res.json({ success: true, message: 'Orphanage updated', orphanage: result.rows[0] });
+    } else {
+      // Create
+      const result = await pool.query(`
+        INSERT INTO orphans (name, description, location, image_url, qr_url, contact_email, contact_phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `, [name, description, location, imageUrl, qrUrl, contactEmail, contactPhone]);
+
+      res.json({ success: true, message: 'Orphanage created', orphanage: result.rows[0] });
+    }
+  } catch (err) {
+    console.error('[v0] Error managing orphanage:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error managing orphanage',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Delete orphanage
+router.delete('/orphanages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM orphans WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Orphanage deleted' });
+  } catch (err) {
+    console.error('[v0] Error deleting orphanage:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting orphanage',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Get all old age homes
+router.get('/old-age-homes', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM old_age_homes ORDER BY created_at DESC');
+    res.json({
+      success: true,
+      homes: result.rows,
+      count: result.rows.length
+    });
+  } catch (err) {
+    console.error('[v0] Error fetching old age homes:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching old age homes',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Add/Update old age home
+router.post('/old-age-homes', async (req, res) => {
+  try {
+    const { id, name, description, location, imageUrl, qrUrl, contactEmail, contactPhone } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Name is required' });
+    }
+
+    if (id) {
+      // Update
+      const result = await pool.query(`
+        UPDATE old_age_homes 
+        SET name = $1, description = $2, location = $3, image_url = $4, qr_url = $5, contact_email = $6, contact_phone = $7, updated_at = NOW()
+        WHERE id = $8
+        RETURNING *
+      `, [name, description, location, imageUrl, qrUrl, contactEmail, contactPhone, id]);
+
+      res.json({ success: true, message: 'Old age home updated', home: result.rows[0] });
+    } else {
+      // Create
+      const result = await pool.query(`
+        INSERT INTO old_age_homes (name, description, location, image_url, qr_url, contact_email, contact_phone)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING *
+      `, [name, description, location, imageUrl, qrUrl, contactEmail, contactPhone]);
+
+      res.json({ success: true, message: 'Old age home created', home: result.rows[0] });
+    }
+  } catch (err) {
+    console.error('[v0] Error managing old age home:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error managing old age home',
+      error: err.message
+    });
+  }
+});
+
+// NEW: Delete old age home
+router.delete('/old-age-homes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM old_age_homes WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Old age home deleted' });
+  } catch (err) {
+    console.error('[v0] Error deleting old age home:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting old age home',
+      error: err.message
+    });
+  }
+});
+
 module.exports = router;

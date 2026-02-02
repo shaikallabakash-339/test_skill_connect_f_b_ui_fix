@@ -236,6 +236,22 @@ const initTables = async () => {
     `);
     console.log('[v0] Donations table created/verified');
 
+    // Create notifications table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        notification_type TEXT DEFAULT 'message',
+        related_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        read_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('[v0] Notifications table created/verified');
+
     // Create email_logs table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS email_logs (
@@ -333,6 +349,8 @@ const initTables = async () => {
     await pool.query('CREATE INDEX IF NOT EXISTS idx_user_messages_receiver ON user_messages(receiver_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_conversations_user ON user_conversations(user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_email_logs_recipient ON email_logs(recipient_email)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read)');
     console.log('[v0] All indexes created');
 
     console.log('[v0] Database initialization completed successfully!');

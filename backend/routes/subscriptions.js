@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/db');
+const { pool } = require('../config/database');
 
 // Get subscription plans
 router.get('/plans', async (req, res) => {
