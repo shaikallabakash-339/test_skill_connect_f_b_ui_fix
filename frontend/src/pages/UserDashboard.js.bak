@@ -1,49 +1,75 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, MessageSquare, Bell, LogOut, Search, Send, Upload, FileText, Trash2,
-  ChevronDown, Settings, User, Users, Zap, Lock, CreditCard, Menu, X
+  ChevronDown, Settings, User, Users, Zap, Lock, CreditCard, X, Camera,
+  Menu, AlertCircle, Download, Plus, Clock, Mail, Phone, MapPin, Briefcase,
+  Edit2, Save, Eye
 } from 'lucide-react';
 import { showToast } from '../utils/toast';
-import '../styles/user-dashboard.css';
+import '../styles/user-dashboard-new.css';
 
 function UserDashboard() {
   const navigate = useNavigate();
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const profilePhotoInputRef = useRef(null);
 
-  // Sidebar state
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [currentNavTab, setCurrentNavTab] = useState('home');
-
-  // User data
+  // Auth & User State
   const [user, setUser] = useState(null);
-  const [profileImage, setProfileImage] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Home tab state
-  const [resumes, setResumes] = useState([]);
+  // UI State
+  const [activeTab, setActiveTab] = useState('home');
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Messages tab state
+  // Home Tab State
   const [allUsers, setAllUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userSearchType, setUserSearchType] = useState('name');
+  const [profileUpdateMode, setProfileUpdateMode] = useState(false);
+  const [updatedProfile, setUpdatedProfile] = useState({});
+  const [topCompanies, setTopCompanies] = useState([]);
+
+  // Messages Tab State
   const [conversations, setConversations] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [currentMessages, setCurrentMessages] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
-  const [searchUsers, setSearchUsers] = useState('');
-  const [showSearchPopup, setShowSearchPopup] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [showPremiumWarning, setShowPremiumWarning] = useState(false);
   const [conversationCount, setConversationCount] = useState(0);
-
-  // Notifications tab state
+  const [peopleSearch, setPeopleSearch] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
+  const [suggestedConnections, setSuggestedConnections] = useState([]);
   const [adminMessages, setAdminMessages] = useState([]);
 
-  // Loading states
-  const [loading, setLoading] = useState(true);
-  const [messageLoading, setMessageLoading] = useState(false);
+  // Notifications Tab State
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const messagesEndRef = useRef(null);
+  // Resume State
+  const [resumes, setResumes] = useState([]);
+  const [resumeUploading, setResumeUploading] = useState(false);
 
-  // Initialize
+  // Profile Photo State
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  // Premium Modal State
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [screenshotUploading, setScreenshotUploading] = useState(false);
+  const [messageFilter, setMessageFilter] = useState('all');
+  const [filteredMessages, setFilteredMessages] = useState([]);
+
+  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+  // Initialize user and fetch data
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (!userData) {
@@ -53,594 +79,1036 @@ function UserDashboard() {
 
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
+    setUpdatedProfile(parsedUser);
+    setIsPremium(parsedUser.is_premium || false);
+
+    // Fetch all data
+    fetchUserProfile(parsedUser);
+    fetchAllUsers();
+    fetchConversations(parsedUser.email);
+    fetchNotifications(parsedUser.id);
+    fetchResumes(parsedUser.email);
+
     setLoading(false);
 
-    // Fetch additional data
-    fetchUserData(parsedUser);
-    fetchResumes(parsedUser.email);
-    fetchConversations(parsedUser.id);
-    fetchNotifications(parsedUser.id);
-
-    // Set up polling for real-time messages
-    const messagePolling = setInterval(() => {
-      if (selectedUser) {
-        pollMessages(parsedUser.id, selectedUser.id);
+    // Set up polling for real-time messages and notifications
+    const messageInterval = setInterval(() => {
+      if (selectedUser && parsedUser.id) {
+        fetchMessages(parsedUser.email, selectedUser.email);
       }
-    }, 3000);
+      if (parsedUser.id) {
+        fetchNotifications(parsedUser.id);
+      }
+    }, 2000);
 
-    return () => clearInterval(messagePolling);
-  }, [navigate]);
+    return () => clearInterval(messageInterval);
+  }, [navigate, selectedUser]);
 
-  // Fetch user data
-  const fetchUserData = async (userData) => {
+  const fetchUserProfile = useCallback(async (userData) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const res = await axios.get(`${apiUrl}/api/user/${userData.email}`);
       if (res.data.success) {
         setUser(res.data.user);
-        setProfileImage(res.data.user.profile_image_url);
+        setUpdatedProfile(res.data.user);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
       }
     } catch (err) {
-      console.error('[v0] Error fetching user data:', err);
+      console.error('Error fetching user profile:', err);
     }
-  };
+  }, [apiUrl]);
 
-  // Fetch resumes
-  const fetchResumes = async (email) => {
+  const fetchAllUsers = useCallback(async () => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/resumes/${email}`);
-      if (res.data.success) {
-        setResumes(res.data.resumes);
+      const res = await axios.get(`${apiUrl}/api/all-users`);
+      if (res.data && Array.isArray(res.data)) {
+        const filtered = res.data.filter(u => u.email !== user?.email);
+        setAllUsers(filtered);
+        setFilteredUsers(filtered);
+
+        // Get top companies
+        const companies = [...new Set(res.data.map(u => u.company_name).filter(Boolean))].slice(0, 5);
+        setTopCompanies(companies);
       }
     } catch (err) {
-      console.error('[v0] Error fetching resumes:', err);
+      console.error('Error fetching users:', err);
     }
-  };
+  }, [apiUrl, user]);
 
-  // Fetch all users for search
   useEffect(() => {
-    if (showSearchPopup && user) {
+    if (user && allUsers.length === 0) {
       fetchAllUsers();
     }
-  }, [showSearchPopup, user]);
+  }, [user]);
 
-  const fetchAllUsers = async () => {
-    try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/users`);
-      if (Array.isArray(res.data)) {
-        setAllUsers(res.data.filter(u => u.email !== user?.email));
-      }
-    } catch (err) {
-      console.error('[v0] Error fetching users:', err);
+  // Search and filter users
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredUsers(allUsers);
+      return;
     }
-  };
 
-  // Fetch conversations
-  const fetchConversations = async (userId) => {
+    const query = searchQuery.toLowerCase();
+    const filtered = allUsers.filter(u => {
+      if (userSearchType === 'name') {
+        return u.fullname?.toLowerCase().includes(query);
+      } else if (userSearchType === 'company') {
+        return u.company_name?.toLowerCase().includes(query);
+      }
+      return false;
+    });
+    setFilteredUsers(filtered);
+  }, [searchQuery, userSearchType, allUsers]);
+
+  // Search for people and companies in messages
+  useEffect(() => {
+    if (peopleSearch.trim()) {
+      const query = peopleSearch.toLowerCase();
+      const filtered = allUsers.filter(u => u.fullname?.toLowerCase().includes(query) && u.email !== user?.email);
+      setSuggestedConnections(filtered);
+    } else if (companySearch.trim()) {
+      const query = companySearch.toLowerCase();
+      const companies = [...new Set(allUsers.map(u => u.company_name).filter(Boolean))].filter(c => c.toLowerCase().includes(query));
+      const filtered = allUsers.filter(u => companies.includes(u.company_name) && u.email !== user?.email);
+      setSuggestedConnections(filtered);
+    } else {
+      setSuggestedConnections([]);
+    }
+  }, [peopleSearch, companySearch, allUsers, user]);
+
+  const fetchConversations = useCallback(async (userEmail) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/conversations/${userId}`);
-      if (res.data.success) {
+      const res = await axios.get(`${apiUrl}/api/conversations/${userEmail}`);
+      if (res.data && res.data.conversations) {
         setConversations(res.data.conversations);
         setConversationCount(res.data.conversations.length);
       }
     } catch (err) {
-      console.error('[v0] Error fetching conversations:', err);
+      console.error('Error fetching conversations:', err);
     }
-  };
+  }, [apiUrl]);
 
-  // Fetch messages for selected user
-  const fetchMessages = async (senderId, receiverId) => {
-    setMessageLoading(true);
+  const fetchMessages = useCallback(async (sender, receiver) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/messages/${senderId}/${receiverId}`);
-      if (res.data.success) {
-        setCurrentMessages(res.data.messages);
+      const res = await axios.get(`${apiUrl}/api/messages/${sender}/${receiver}`);
+      if (res.data && res.data.messages) {
+        setMessages(res.data.messages);
         scrollToBottom();
       }
     } catch (err) {
-      console.error('[v0] Error fetching messages:', err);
-    } finally {
-      setMessageLoading(false);
+      console.error('Error fetching messages:', err);
     }
-  };
+  }, [apiUrl]);
 
-  // Poll for new messages
-  const pollMessages = async (senderId, receiverId) => {
+  const fetchNotifications = useCallback(async (userId) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-      const res = await axios.get(`${apiUrl}/api/messages/${senderId}/${receiverId}`);
-      if (res.data.success) {
-        setCurrentMessages(res.data.messages);
-      }
-    } catch (err) {
-      console.error('[v0] Error polling messages:', err);
-    }
-  };
-
-  // Fetch notifications
-  const fetchNotifications = async (userId) => {
-    try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const res = await axios.get(`${apiUrl}/api/notifications/${userId}`);
-      if (res.data.success) {
-        setAdminMessages(res.data.notifications);
+      if (res.data && res.data.notifications) {
+        setNotifications(res.data.notifications);
+        const unread = res.data.notifications.filter(n => !n.is_read).length;
+        setUnreadCount(unread);
+        // Separate admin messages
+        const adminMsgs = res.data.notifications.filter(n => n.type === 'admin_message');
+        setAdminMessages(adminMsgs);
       }
     } catch (err) {
-      console.error('[v0] Error fetching notifications:', err);
+      console.error('Error fetching notifications:', err);
     }
-  };
+  }, [apiUrl]);
 
-  // Send message
+  const fetchResumes = useCallback(async (email) => {
+    try {
+      const res = await axios.get(`${apiUrl}/api/resumes/${email}`);
+      if (res.data && res.data.resumes) {
+        setResumes(res.data.resumes);
+      }
+    } catch (err) {
+      console.error('Error fetching resumes:', err);
+    }
+  }, [apiUrl]);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!messageInput.trim() || !selectedUser) return;
+    if (!messageInput.trim() || !selectedUser || !user) return;
+
+    // Check conversation limit for free users
+    if (!isPremium && conversationCount >= 5) {
+      setShowPremiumWarning(true);
+      return;
+    }
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const res = await axios.post(`${apiUrl}/api/send-message`, {
-        sender_id: user.id,
-        receiver_id: selectedUser.id,
+        sender_email: user.email,
+        receiver_email: selectedUser.email,
         message: messageInput,
+        timestamp: new Date().toISOString()
       });
 
       if (res.data.success) {
         setMessageInput('');
-        await fetchMessages(user.id, selectedUser.id);
-        await fetchConversations(user.id);
+        fetchMessages(user.email, selectedUser.email);
+        showToast('Message sent!', 'success');
       }
     } catch (err) {
-      console.error('[v0] Error sending message:', err);
+      console.error('Error sending message:', err);
+      showToast('Failed to send message', 'error');
     }
   };
 
-  // Handle user selection for messaging
-  const handleSelectUser = (selectedUserData) => {
-    setSelectedUser(selectedUserData);
-    setShowSearchPopup(false);
-    fetchMessages(user.id, selectedUserData.id);
-
-    const exists = conversations.find(c => c.conversation_partner_id === selectedUserData.id);
-    if (!exists && conversationCount < 5) {
-      // Can start new conversation
-    } else if (!exists && conversationCount >= 5) {
-      alert('You can only have 5 active conversations. Upgrade to premium for more.');
+  const handleSelectUser = async (selectedU) => {
+    setSelectedUser(selectedU);
+    if (user) {
+      fetchMessages(user.email, selectedU.email);
     }
   };
 
-  // Upload resume
   const handleResumeUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('File size must be less than 5MB', 'error');
+      return;
+    }
+
+    setResumeUploading(true);
     const formData = new FormData();
-    formData.append('resume', file);
+    formData.append('file', file);
     formData.append('email', user.email);
-    formData.append('name', user.fullName || user.fullname);
 
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const res = await axios.post(`${apiUrl}/api/upload-resume`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (res.data.success) {
+        showToast('Resume uploaded successfully!', 'success');
         fetchResumes(user.email);
-        alert('Resume uploaded successfully!');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } else {
+        showToast(res.data.message || 'Upload failed', 'error');
       }
     } catch (err) {
-      console.error('[v0] Error uploading resume:', err);
-      alert('Failed to upload resume');
+      console.error('Resume upload error:', err);
+      showToast(err.response?.data?.message || 'Upload failed', 'error');
+    } finally {
+      setResumeUploading(false);
     }
   };
 
-  // Logout
+  const handleProfilePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Photo size must be less than 2MB', 'error');
+      return;
+    }
+
+    setPhotoUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('email', user.email);
+
+    try {
+      const res = await axios.post(`${apiUrl}/api/upload-profile-photo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data.success) {
+        showToast('Profile photo updated!', 'success');
+        const updatedUser = { ...user, profile_image_url: res.data.photoUrl };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
+      } else {
+        showToast(res.data.message || 'Upload failed', 'error');
+      }
+    } catch (err) {
+      console.error('Photo upload error:', err);
+      showToast(err.response?.data?.message || 'Upload failed', 'error');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!user) return;
+
+    try {
+      const res = await axios.put(`${apiUrl}/api/user/${user.id}/update`, updatedProfile);
+      if (res.data.success) {
+        setUser(res.data.user);
+        setUpdatedProfile(res.data.user);
+        localStorage.setItem('user', JSON.stringify(res.data.user));
+        setProfileUpdateMode(false);
+        showToast('Profile updated successfully!', 'success');
+      }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      showToast('Failed to update profile', 'error');
+    }
+  };
+
+  const handleDeleteResume = async (resumeId) => {
+    if (!window.confirm('Are you sure you want to delete this resume?')) return;
+
+    try {
+      const res = await axios.delete(`${apiUrl}/api/resume/${resumeId}`);
+      if (res.data.success) {
+        showToast('Resume deleted successfully!', 'success');
+        if (user) fetchResumes(user.email);
+      }
+    } catch (err) {
+      console.error('Error deleting resume:', err);
+      showToast('Failed to delete resume', 'error');
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     navigate('/login');
   };
 
-  // Scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   if (loading) {
-    return <div className="loading-container"><p>Loading...</p></div>;
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Loading your dashboard...</p>
+      </div>
+    );
   }
 
   return (
-    <motion.div
-      className="user-dashboard"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
-      {/* Sidebar */}
-      <motion.aside
-        className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}
-        initial={{ x: -300 }}
-        animate={{ x: sidebarOpen ? 0 : -300 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div className="sidebar-header">
-          <h2>Skill Connect</h2>
-          <button className="close-sidebar" onClick={() => setSidebarOpen(false)}>
-            <X size={24} />
+    <div className="user-dashboard-modern">
+      {/* TOP NAVBAR */}
+      <nav className="top-navbar">
+        <div className="nav-left">
+          <button className="menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            <Menu size={24} />
+          </button>
+          <h1 className="nav-title">Skill Connect</h1>
+        </div>
+
+        <div className="nav-center">
+          <button
+            className={`nav-btn ${activeTab === 'home' ? 'active' : ''}`}
+            onClick={() => setActiveTab('home')}
+          >
+            <Home size={18} /> Home
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'messages' ? 'active' : ''}`}
+            onClick={() => setActiveTab('messages')}
+          >
+            <MessageSquare size={18} /> Messages
+          </button>
+          <button
+            className={`nav-btn ${activeTab === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notifications')}
+          >
+            <Bell size={18} /> Notifications {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
           </button>
         </div>
 
-        {/* User Profile Section */}
-        <div className="sidebar-profile">
-          <div className="profile-image-container">
-            <img
-              src={profileImage || 'https://via.placeholder.com/120?text=Profile'}
-              alt="Profile"
-              className="profile-image"
-            />
-          </div>
-          <h3>{user?.fullName || 'User'}</h3>
-          <p className="profile-company">{user?.company || 'Not specified'}</p>
-          <p className="profile-status">{user?.status}</p>
-
-          {/* Profile Dropdown */}
+        <div className="nav-right">
           <div className="profile-dropdown">
             <button
-              className="dropdown-toggle"
+              className="profile-btn"
               onClick={() => setProfileMenuOpen(!profileMenuOpen)}
             >
-              <MoreVertical size={20} />
+              {user?.profile_image_url ? (
+                <img src={user.profile_image_url} alt="Profile" className="profile-pic" />
+              ) : (
+                <User size={20} />
+              )}
+              <ChevronDown size={16} />
             </button>
+
             {profileMenuOpen && (
               <motion.div
                 className="dropdown-menu"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <button className="dropdown-item">
-                  <User size={18} /> View Profile
+                <button onClick={() => { setActiveTab('profile'); setProfileUpdateMode(false); }} className="profile-menu-item">
+                  <User size={16} /> Profile Details
                 </button>
-                <button className="dropdown-item">
-                  <Settings size={18} /> Settings
+                <button onClick={() => { setActiveTab('resumes'); }} className="profile-menu-item">
+                  <FileText size={16} /> Resumes
                 </button>
-                <button className="dropdown-item logout-item" onClick={handleLogout}>
-                  <LogOut size={18} /> Logout
+                <button onClick={() => { setActiveTab('notifications'); }} className="profile-menu-item">
+                  <Bell size={16} /> Notifications
+                </button>
+                <button onClick={() => navigate('/premium')} className="profile-menu-item">
+                  <Zap size={16} /> Upgrade Premium
+                </button>
+                <button onClick={handleLogout} className="profile-menu-item logout-btn">
+                  <LogOut size={16} /> Logout
                 </button>
               </motion.div>
             )}
           </div>
         </div>
+      </nav>
 
-        {/* Navigation */}
-        <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${currentNavTab === 'home' ? 'active' : ''}`}
-            onClick={() => setCurrentNavTab('home')}
-          >
-            <Home size={20} /> Home
-          </button>
-          <button
-            className={`nav-item ${currentNavTab === 'messages' ? 'active' : ''}`}
-            onClick={() => setCurrentNavTab('messages')}
-          >
-            <MessageSquare size={20} /> Messages
-            {conversationCount > 0 && <span className="badge">{conversationCount}/5</span>}
-          </button>
-          <button
-            className={`nav-item ${currentNavTab === 'notifications' ? 'active' : ''}`}
-            onClick={() => setCurrentNavTab('notifications')}
-          >
-            <Bell size={20} /> Notifications
-            {adminMessages.length > 0 && <span className="badge">{adminMessages.length}</span>}
-          </button>
-        </nav>
-      </motion.aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        {/* Top Navbar */}
-        <header className="top-navbar">
-          <button className="toggle-sidebar" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Menu size={24} />
-          </button>
-          <h1>Professional Network Dashboard</h1>
-          <div className="navbar-right">
-            {currentNavTab === 'messages' && (
-              <button
-                className="search-button"
-                onClick={() => setShowSearchPopup(!showSearchPopup)}
-              >
-                <Search size={20} /> Find People
-              </button>
-            )}
-            <button className="logout-btn" onClick={handleLogout}>
-              <LogOut size={20} />
-            </button>
-          </div>
-        </header>
-
-        {/* Content Area */}
-        <div className="content-area">
-          {/* HOME TAB */}
-          {currentNavTab === 'home' && (
-            <motion.div
-              className="tab-content home-tab"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="welcome-section">
-                <h2>Welcome to Professional Networking</h2>
-                <p>Connect with people, share skills, and grow your network</p>
-              </div>
-
-              {/* User Details */}
-              <div className="user-details-section">
-                <h3>Your Profile</h3>
-                <div className="details-grid">
-                  <div className="detail-item">
-                    <span className="label">Name:</span>
-                    <span className="value">{user?.fullName}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Company:</span>
-                    <span className="value">{user?.company || 'Not specified'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Email:</span>
-                    <span className="value">{user?.email}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Phone:</span>
-                    <span className="value">{user?.phone || 'Not specified'}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Status:</span>
-                    <span className="value">{user?.status}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Qualification:</span>
-                    <span className="value">{user?.qualification}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Resumes Section */}
-              <div className="resumes-section">
-                <div className="resumes-header">
-                  <h3>Your Resumes</h3>
-                  <label className="upload-button">
-                    <Upload size={20} /> Upload Resume
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      onChange={handleResumeUpload}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-                </div>
-
-                {resumes.length > 0 ? (
-                  <div className="resumes-list">
-                    {resumes.map((resume) => (
-                      <motion.div
-                        key={resume.id}
-                        className="resume-item"
-                        whileHover={{ y: -5 }}
-                      >
-                        <File size={32} className="file-icon" />
-                        <div className="resume-info">
-                          <h4>{resume.name}</h4>
-                          <p>{resume.file_type}</p>
-                        </div>
-                        <a href={resume.resume_url} target="_blank" rel="noopener noreferrer" className="download-link">
-                          Download
-                        </a>
-                      </motion.div>
-                    ))}
-                  </div>
+      {/* SIDEBAR & MAIN CONTENT */}
+      <div className="dashboard-container">
+        {/* LEFT SIDEBAR */}
+        <motion.div
+          className={`user-sidebar ${sidebarOpen ? 'open' : ''}`}
+          initial={{ x: -280 }}
+          animate={{ x: sidebarOpen ? 0 : -280 }}
+        >
+          <div className="sidebar-content">
+            {/* Profile Card */}
+            <div className="profile-card">
+              <div className="profile-photo-container">
+                {user?.profile_image_url ? (
+                  <img src={user.profile_image_url} alt="Profile" className="profile-photo" />
                 ) : (
-                  <p className="empty-message">No resumes uploaded yet. Upload your first resume to get started!</p>
+                  <div className="profile-photo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff' }}>
+                    <User size={60} color="#4f46e5" />
+                  </div>
+                )}
+                <button
+                  className="photo-edit-btn"
+                  onClick={() => profilePhotoInputRef.current?.click()}
+                  disabled={photoUploading}
+                >
+                  <Camera size={16} />
+                </button>
+                <input
+                  ref={profilePhotoInputRef}
+                  type="file"
+                  onChange={handleProfilePhotoUpload}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              <h3>{user?.fullname}</h3>
+              <p className="company">{user?.company_name || 'Professional'}</p>
+              <p>{user?.status || 'Active'}</p>
+              <span className="status">✓ Active</span>
+
+              <div className="profile-stats">
+                <div className="stat">
+                  <span className="number">{conversations.length}</span>
+                  <span className="label">Chats</span>
+                </div>
+                <div className="stat">
+                  <span className="number">{resumes.length}</span>
+                  <span className="label">Resumes</span>
+                </div>
+                <div className="stat">
+                  <span className="number">{unreadCount}</span>
+                  <span className="label">Alerts</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Companies */}
+            <div className="top-companies">
+              <h4>Top Companies</h4>
+              <ul>
+                {topCompanies.length > 0 ? (
+                  topCompanies.map((company, idx) => (
+                    <li key={idx}>
+                      <strong>{company}</strong>
+                      <p style={{ fontSize: '11px', color: '#999' }}>
+                        {allUsers.filter(u => u.company_name === company).length} users
+                      </p>
+                    </li>
+                  ))
+                ) : (
+                  <li>No companies yet</li>
+                )}
+              </ul>
+              <p className="company-hint">Companies with active members</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* MAIN CONTENT */}
+        <div className="main-content">
+          {/* WELCOME SECTION */}
+          {activeTab === 'home' && !profileUpdateMode && (
+            <motion.div
+              className="welcome-section"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <h1>Welcome to Professional Networking of Skill Connect 👋</h1>
+              <p>Explore professionals, connect with teams, and grow your network</p>
+            </motion.div>
+          )}
+
+          {/* HOME TAB */}
+          {activeTab === 'home' && (
+            <motion.div className="home-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="search-container">
+                <Search size={20} />
+                <input
+                  type="text"
+                  placeholder={`Search by ${userSearchType}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              <div className="users-grid">
+                {filteredUsers.length > 0 ? (
+                  filteredUsers.map((u) => (
+                    <motion.div key={u.id} className="user-card" whileHover={{ y: -8 }}>
+                      {u.profile_image_url ? (
+                        <img src={u.profile_image_url} alt={u.fullname} className="user-avatar" />
+                      ) : (
+                        <div className="user-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff' }}>
+                          <User size={40} color="#4f46e5" />
+                        </div>
+                      )}
+                      <h3>{u.fullname}</h3>
+                      <p className="company">{u.company_name}</p>
+                      <p className="status">{u.status || 'Available'}</p>
+                      <button
+                        className="message-btn"
+                        onClick={() => { handleSelectUser(u); setActiveTab('messages'); }}
+                      >
+                        <MessageSquare size={16} /> Message
+                      </button>
+                    </motion.div>
+                  ))
+                ) : (
+                  <p style={{ textAlign: 'center', gridColumn: '1 / -1', color: '#999' }}>
+                    No users found matching your search
+                  </p>
                 )}
               </div>
             </motion.div>
           )}
 
           {/* MESSAGES TAB */}
-          {currentNavTab === 'messages' && (
-            <motion.div
-              className="tab-content messages-tab"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
+          {activeTab === 'messages' && (
+            <motion.div className="messages-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="messages-container">
-                {/* Search Popup */}
-                {showSearchPopup && (
-                  <motion.div
-                    className="search-popup"
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  >
-                    <div className="search-popup-header">
-                      <h4>Find People to Connect</h4>
-                      <button onClick={() => setShowSearchPopup(false)}>
-                        <X size={20} />
-                      </button>
-                    </div>
-
+                {/* Search Bars */}
+                <div className="message-search-section">
+                  <div className="search-container" style={{ marginBottom: '10px', flex: 1 }}>
+                    <Search size={18} />
                     <input
                       type="text"
-                      placeholder="Search by name or company..."
-                      value={searchUsers}
-                      onChange={(e) => setSearchUsers(e.target.value)}
-                      className="search-input"
+                      placeholder="Search people by name..."
+                      value={peopleSearch}
+                      onChange={(e) => { setPeopleSearch(e.target.value); setCompanySearch(''); }}
                     />
+                  </div>
+                  <div className="search-container" style={{ marginBottom: '10px', flex: 1 }}>
+                    <Search size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search companies to suggest connections..."
+                      value={companySearch}
+                      onChange={(e) => { setCompanySearch(e.target.value); setPeopleSearch(''); }}
+                    />
+                  </div>
+                </div>
 
-                    <div className="search-results">
-                      {allUsers
-                        .filter(
-                          (u) =>
-                            u.fullname.toLowerCase().includes(searchUsers.toLowerCase()) ||
-                            (u.company && u.company.toLowerCase().includes(searchUsers.toLowerCase()))
-                        )
-                        .slice(0, 10)
-                        .map((u) => (
-                          <motion.div
-                            key={u.id}
-                            className="search-result-item"
-                            whileHover={{ scale: 1.02 }}
-                            onClick={() => handleSelectUser(u)}
-                          >
-                            <img
-                              src={u.profile_image_url || 'https://via.placeholder.com/40?text=User'}
-                              alt={u.fullname}
-                              className="result-avatar"
-                            />
-                            <div className="result-info">
-                              <h5>{u.fullname}</h5>
-                              <p>{u.company || u.status}</p>
+                {/* Suggested Connections */}
+                {suggestedConnections.length > 0 && (
+                  <div className="suggested-connections">
+                    <h4>Suggested Connections</h4>
+                    <div className="users-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                      {suggestedConnections.slice(0, 6).map((u) => (
+                        <motion.div key={u.id} className="user-card" whileHover={{ y: -4 }} style={{ padding: '10px' }}>
+                          {u.profile_image_url ? (
+                            <img src={u.profile_image_url} alt={u.fullname} className="user-avatar" style={{ width: '40px', height: '40px' }} />
+                          ) : (
+                            <div className="user-avatar" style={{ width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e0e7ff' }}>
+                              <User size={20} color="#4f46e5" />
                             </div>
-                            <Plus size={18} />
-                          </motion.div>
-                        ))}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Conversations List */}
-                <div className="conversations-list">
-                  <h3>Your Conversations ({conversationCount}/5)</h3>
-                  {conversations.length > 0 ? (
-                    <div className="conversations">
-                      {conversations.map((conv) => (
-                        <motion.div
-                          key={conv.id}
-                          className={`conversation-item ${selectedUser?.id === conv.conversation_partner_id ? 'active' : ''}`}
-                          whileHover={{ x: 5 }}
-                          onClick={() => handleSelectUser(conv.conversation_partner)}
-                        >
-                          <img
-                            src={conv.conversation_partner?.profile_image_url || 'https://via.placeholder.com/40?text=User'}
-                            alt={conv.conversation_partner?.fullname}
-                            className="conv-avatar"
-                          />
-                          <div className="conv-info">
-                            <h5>{conv.conversation_partner?.fullname}</h5>
-                            <p>{conv.last_message || 'No messages yet'}</p>
-                          </div>
+                          )}
+                          <h3 style={{ fontSize: '14px', margin: '5px 0' }}>{u.fullname}</h3>
+                          <p className="company" style={{ fontSize: '12px' }}>{u.company_name}</p>
+                          <button
+                            className="message-btn"
+                            onClick={() => { handleSelectUser(u); setSuggestedConnections([]); setPeopleSearch(''); setCompanySearch(''); }}
+                            style={{ fontSize: '12px', padding: '5px 10px' }}
+                          >
+                            <MessageSquare size={14} /> Message
+                          </button>
                         </motion.div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="empty-message">No conversations yet. Search for people to connect!</p>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Chat Area */}
-                {selectedUser ? (
-                  <div className="chat-area">
-                    <div className="chat-header">
-                      <img
-                        src={selectedUser.profile_image_url || 'https://via.placeholder.com/40?text=User'}
-                        alt={selectedUser.fullname}
-                        className="chat-avatar"
-                      />
-                      <div className="chat-user-info">
-                        <h4>{selectedUser.fullname}</h4>
-                        <p>{selectedUser.company || selectedUser.status}</p>
-                      </div>
-                    </div>
-
-                    <div className="messages-list">
-                      {messageLoading ? (
-                        <p className="loading">Loading messages...</p>
-                      ) : currentMessages.length > 0 ? (
-                        currentMessages.map((msg) => (
-                          <motion.div
-                            key={msg.id}
-                            className={`message ${msg.sender_id === user.id ? 'sent' : 'received'}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                          >
-                            <p>{msg.message}</p>
-                            <span className="message-time">
-                              <Clock size={12} /> {new Date(msg.created_at).toLocaleTimeString()}
-                            </span>
+                {/* Messages Sections */}
+                <div className="messages-sections">
+                  {/* Admin Messages */}
+                  <div className="admin-messages-section">
+                    <h3>Admin Messages</h3>
+                    <div className="admin-messages-list">
+                      {adminMessages.length > 0 ? (
+                        adminMessages.map((msg, idx) => (
+                          <motion.div key={idx} className="admin-message-item" whileHover={{ x: 5 }}>
+                            <div className="icon admin">
+                              <Bell size={20} />
+                            </div>
+                            <div className="content">
+                              <h4>{msg.title}</h4>
+                              <p>{msg.message}</p>
+                              <div className="time">{new Date(msg.timestamp).toLocaleString()}</div>
+                            </div>
                           </motion.div>
                         ))
                       ) : (
-                        <p className="empty-message">No messages yet. Say hello!</p>
+                        <p>No admin messages</p>
                       )}
-                      <div ref={messagesEndRef} />
                     </div>
+                  </div>
 
-                    <form className="message-input-form" onSubmit={handleSendMessage}>
-                      <input
-                        type="text"
-                        value={messageInput}
-                        onChange={(e) => setMessageInput(e.target.value)}
-                        placeholder="Type your message..."
-                        className="message-input"
-                      />
-                      <button type="submit" className="send-button">
-                        <Send size={20} />
-                      </button>
-                    </form>
+                  {/* User Messages */}
+                  <div className="user-messages-section">
+                    <h3>User Messages</h3>
+                    <div className="messages-container">
+                      {/* Conversations Sidebar */}
+                      <div className="conversations-sidebar">
+                        <h4>Active Conversations</h4>
+                        <div className="search-container" style={{ marginBottom: '10px' }}>
+                          <Search size={18} />
+                          <input type="text" placeholder="Search conversations..." />
+                        </div>
+
+                        {!isPremium && conversationCount >= 5 && (
+                          <div className="upgrade-prompt">
+                            <Zap size={16} /> Upgrade for more chats
+                          </div>
+                        )}
+
+                        <div className="conversations-list">
+                          {conversations.length > 0 ? (
+                            conversations.map((conv) => (
+                              <motion.div
+                                key={conv.other_user_id}
+                                className={`conversation-item ${selectedUser?.id === conv.other_user_id ? 'active' : ''}`}
+                                onClick={() => handleSelectUser(conv.other_user)}
+                                whileHover={{ x: 5 }}
+                              >
+                                {conv.other_user?.profile_image_url ? (
+                                  <img src={conv.other_user.profile_image_url} alt={conv.other_user?.fullname} />
+                                ) : (
+                                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <User size={20} color="#4f46e5" />
+                                  </div>
+                                )}
+                                <div className="conv-info">
+                                  <h4>{conv.other_user?.fullname}</h4>
+                                  <p>{conv.last_message || 'No messages yet'}</p>
+                                </div>
+                              </motion.div>
+                            ))
+                          ) : (
+                            <p style={{ padding: '20px', textAlign: 'center', color: '#999' }}>
+                              No conversations yet. Start from Home tab!
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Chat Area */}
+                      <div className="chat-area">
+                        {selectedUser ? (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingBottom: '15px', borderBottom: '1px solid #e2e8f0' }}>
+                              {selectedUser.profile_image_url ? (
+                                <img src={selectedUser.profile_image_url} alt={selectedUser.fullname} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                              ) : (
+                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <User size={20} color="#4f46e5" />
+                                </div>
+                              )}
+                              <div>
+                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{selectedUser.fullname}</h3>
+                                <p style={{ margin: 0, fontSize: '12px', color: '#999' }}>{selectedUser.company_name}</p>
+                              </div>
+                            </div>
+
+                            <div className="messages-list">
+                              {messages.map((msg, idx) => (
+                                <motion.div
+                                  key={idx}
+                                  className={`message ${msg.sender_email === user?.email ? 'sent' : 'received'}`}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                >
+                                  <p>{msg.message}</p>
+                                  <small>{new Date(msg.timestamp).toLocaleTimeString()}</small>
+                                </motion.div>
+                              ))}
+                              <div ref={messagesEndRef} />
+                            </div>
+
+                            {showPremiumWarning && (
+                              <div style={{ background: '#fef3c7', padding: '12px', borderRadius: '8px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <p style={{ margin: 0, fontSize: '13px' }}>⭐ Free users limited to 5 conversations</p>
+                                <button
+                                  onClick={() => setShowPremiumWarning(false)}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            )}
+
+                            <form onSubmit={handleSendMessage} className="message-input-area">
+                              <input
+                                type="text"
+                                placeholder="Type a message..."
+                                value={messageInput}
+                                onChange={(e) => setMessageInput(e.target.value)}
+                                disabled={!isPremium && conversationCount >= 5}
+                              />
+                              <button type="submit" disabled={!isPremium && conversationCount >= 5}>
+                                <Send size={18} />
+                              </button>
+                            </form>
+                          </>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#999' }}>
+                            <MessageSquare size={48} />
+                            <p>Select a conversation to start chatting</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="no-chat-selected">
-                    <MessageSquare size={48} />
-                    <p>Select a conversation or search for someone to chat</p>
-                  </div>
-                )}
+                </div>
               </div>
             </motion.div>
           )}
 
           {/* NOTIFICATIONS TAB */}
-          {currentNavTab === 'notifications' && (
-            <motion.div
-              className="tab-content notifications-tab"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <h3>Notifications from Admin</h3>
-              {adminMessages.length > 0 ? (
-                <div className="notifications-list">
-                  {adminMessages.map((notif) => (
-                    <motion.div
-                      key={notif.id}
-                      className="notification-item"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                    >
-                      <div className="notif-icon">
-                        <Zap size={24} />
+          {activeTab === 'notifications' && (
+            <motion.div className="notifications-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2>All Notifications</h2>
+              <div className="notifications-list">
+                {notifications.length > 0 ? (
+                  notifications.map((notif) => (
+                    <motion.div key={notif.id} className="notification-item" whileHover={{ x: 5 }}>
+                      <div className="icon admin">
+                        <Bell size={20} />
                       </div>
-                      <div className="notif-content">
+                      <div className="content">
                         <h4>{notif.title}</h4>
                         <p>{notif.message}</p>
-                        <span className="notif-time">
-                          {new Date(notif.created_at).toLocaleDateString()}
-                        </span>
+                        <div className="time">{new Date(notif.timestamp).toLocaleString()}</div>
                       </div>
                     </motion.div>
-                  ))}
+                  ))
+                ) : (
+                  <p className="empty">No notifications yet</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* RESUMES TAB */}
+          {activeTab === 'resumes' && !profileUpdateMode && (
+            <motion.div className="tab-content" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2>My Resumes</h2>
+              <div style={{ background: 'white', padding: '30px', borderRadius: '12px', textAlign: 'center', marginBottom: '30px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <label htmlFor="resume-input" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                  <Upload size={32} color="#4f46e5" />
+                  <p style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Upload Resume</p>
+                  <small style={{ color: '#999' }}>PDF, DOC, DOCX (Max 5MB)</small>
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  id="resume-input"
+                  onChange={handleResumeUpload}
+                  disabled={resumeUploading}
+                  accept=".pdf,.doc,.docx"
+                  style={{ display: 'none' }}
+                />
+                {resumeUploading && <p style={{ color: '#4f46e5', marginTop: '10px' }}>Uploading...</p>}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {resumes.length > 0 ? (
+                  resumes.map((resume) => (
+                    <motion.div
+                      key={resume.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '15px',
+                        padding: '15px',
+                        background: 'white',
+                        borderRadius: '12px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                      whileHover={{ y: -3 }}
+                    >
+                      <FileText size={32} color="#4f46e5" />
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ margin: 0, fontWeight: '600' }}>{resume.name}</h4>
+                        <small style={{ color: '#999' }}>{(resume.file_size / 1024).toFixed(2)} KB</small>
+                      </div>
+                      <a
+                        href={resume.minio_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          padding: '8px 16px',
+                          background: '#4f46e5',
+                          color: 'white',
+                          borderRadius: '6px',
+                          textDecoration: 'none',
+                          fontSize: '13px',
+                          fontWeight: '600'
+                        }}
+                      >
+                        View
+                      </a>
+                      <button
+                        onClick={() => handleDeleteResume(resume.id)}
+                        style={{
+                          padding: '8px 12px',
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </motion.div>
+                  ))
+                ) : (
+                  <p style={{ textAlign: 'center', color: '#999' }}>No resumes uploaded yet</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* PROFILE TAB */}
+          {activeTab === 'profile' && !profileUpdateMode && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2>My Profile</h2>
+              <div style={{ background: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', gap: '30px', marginBottom: '30px' }}>
+                  <div>
+                    {user?.profile_image_url ? (
+                      <img
+                        src={user.profile_image_url}
+                        alt="Profile"
+                        style={{
+                          width: '150px',
+                          height: '150px',
+                          borderRadius: '12px',
+                          objectFit: 'cover',
+                          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: '150px',
+                          height: '150px',
+                          borderRadius: '12px',
+                          background: '#e0e7ff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <User size={80} color="#4f46e5" />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => profilePhotoInputRef.current?.click()}
+                      disabled={photoUploading}
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        padding: '10px',
+                        background: '#4f46e5',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600'
+                      }}
+                    >
+                      <Camera size={16} style={{ marginRight: '6px' }} /> {photoUploading ? 'Uploading...' : 'Change Photo'}
+                    </button>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '4px' }}>Full Name</label>
+                      <p style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>{user?.fullname}</p>
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '4px' }}>Email</label>
+                      <p style={{ margin: 0, fontSize: '14px' }}>{user?.email}</p>
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '4px' }}>Company</label>
+                      <p style={{ margin: 0, fontSize: '14px', color: '#4f46e5', fontWeight: '600' }}>{user?.company_name || 'Not specified'}</p>
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '4px' }}>Status</label>
+                      <p style={{ margin: 0, fontSize: '14px' }}>{user?.status}</p>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', color: '#999', marginBottom: '4px' }}>Premium Status</label>
+                      <p style={{ margin: 0, fontSize: '14px', color: user?.is_premium ? '#10b981' : '#999' }}>
+                        {user?.is_premium ? '✓ Premium Member' : 'Free Member'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <p className="empty-message">No notifications yet</p>
-              )}
+
+                <button
+                  onClick={() => setProfileUpdateMode(true)}
+                  style={{
+                    padding: '12px 24px',
+                    background: '#4f46e5',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  <Settings size={16} style={{ marginRight: '6px' }} /> Edit Profile
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* PROFILE EDIT MODE */}
+          {activeTab === 'profile' && profileUpdateMode && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2>Edit Profile</h2>
+              <form onSubmit={handleUpdateProfile} style={{ maxWidth: '600px', background: 'white', padding: '30px', borderRadius: '12px' }}>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px' }}>Full Name</label>
+                  <input
+                    type="text"
+                    value={updatedProfile.fullname || ''}
+                    onChange={(e) => setUpdatedProfile({ ...updatedProfile, fullname: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px' }}>Company</label>
+                  <input
+                    type="text"
+                    value={updatedProfile.company_name || ''}
+                    onChange={(e) => setUpdatedProfile({ ...updatedProfile, company_name: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px' }}>Phone</label>
+                  <input
+                    type="tel"
+                    value={updatedProfile.phone || ''}
+                    onChange={(e) => setUpdatedProfile({ ...updatedProfile, phone: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '14px' }}>Bio</label>
+                  <textarea
+                    value={updatedProfile.bio || ''}
+                    onChange={(e) => setUpdatedProfile({ ...updatedProfile, bio: e.target.value })}
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    type="submit"
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: '#4f46e5',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProfileUpdateMode(false)}
+                    style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: '#f1f5f9',
+                      color: '#1e293b',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </motion.div>
           )}
         </div>
-      </main>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
 export default UserDashboard;
+

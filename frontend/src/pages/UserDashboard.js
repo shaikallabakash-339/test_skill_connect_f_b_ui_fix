@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home, MessageSquare, Bell, LogOut, Search, Send, Upload, FileText, Trash2,
   ChevronDown, Settings, User, Users, Zap, Lock, CreditCard, X, Camera,
-  Menu, AlertCircle
+  Menu, AlertCircle, Download, Plus, Clock, Mail, Phone, MapPin, Briefcase,
+  Edit2, Save, Eye
 } from 'lucide-react';
 import { showToast } from '../utils/toast';
 import '../styles/user-dashboard-new.css';
@@ -57,6 +58,14 @@ function UserDashboard() {
 
   // Profile Photo State
   const [photoUploading, setPhotoUploading] = useState(false);
+
+  // Premium Modal State
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [screenshotUploading, setScreenshotUploading] = useState(false);
+  const [messageFilter, setMessageFilter] = useState('all');
+  const [filteredMessages, setFilteredMessages] = useState([]);
 
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 

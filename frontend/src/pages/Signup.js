@@ -105,8 +105,10 @@ function Signup() {
         errorMsg = 'Email already exists. Please use a different email.';
       } else if (err.response?.status === 503) {
         errorMsg = 'Server is not ready. Please try again in a moment.';
-      } else if (err.message === 'Network Error') {
-        errorMsg = 'Cannot connect to server. Please check your connection.';
+      } else if (err.code === 'ECONNREFUSED' || err.message === 'Network Error') {
+        errorMsg = 'Cannot connect to server. Please ensure the backend is running on http://localhost:5000';
+      } else if (err.message.includes('timeout')) {
+        errorMsg = 'Request timeout. Please check your connection and try again.';
       }
       
       setError(errorMsg);

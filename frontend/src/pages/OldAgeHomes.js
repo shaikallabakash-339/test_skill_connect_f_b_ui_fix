@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Upload, X, AlertCircle } from 'lucide-react';
+import { Upload, X, AlertCircle, Heart, Share2, Clock, MapPin, Users, Heart as HeartIcon, ArrowRight, Check } from 'lucide-react';
 import '../styles/donations.css';
 
 const OldAgeHomes = () => {
@@ -119,166 +119,564 @@ const OldAgeHomes = () => {
   };
 
   return (
-    <div className="donation-container">
-      <div className="donation-header">
-        <h1 className="title">Support Old Age Homes</h1>
-        <p className="subtitle">Help provide care and comfort to elderly in need</p>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
+      {/* Header */}
+      <div style={{ color: 'white', padding: '60px 40px', textAlign: 'center' }}>
+        <motion.h1 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ fontSize: '48px', fontWeight: 'bold', margin: '0 0 20px 0' }}
+        >
+          🏥 Support Old Age Homes
+        </motion.h1>
+        <motion.p 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          style={{ fontSize: '20px', margin: 0, opacity: 0.9 }}
+        >
+          Bring comfort, care, and dignity to our elderly citizens
+        </motion.p>
       </div>
 
-      {loading ? (
-        <div className="loading-state">
-          <p>Loading homes...</p>
-        </div>
-      ) : error ? (
-        <div className="error-state">
-          <AlertCircle size={24} />
-          <p>{error}</p>
-          <button onClick={fetchHomes} className="retry-btn">Retry</button>
-        </div>
-      ) : !showPayment ? (
-        <div className="homes-grid">
-          {homes.length > 0 ? (
-            homes.map((home) => (
-              <motion.div
-                key={home.id}
-                className="home-card"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ y: -8 }}
-              >
-                {home.home_url && (
-                  <div className="home-image-container">
-                    <img src={home.home_url} alt={home.name} className="home-image" />
-                  </div>
-                )}
-                <div className="home-content">
-                  <h3 className="home-name">{home.name}</h3>
-                  <div className="qr-code-container">
-                    {home.qr_url && <img src={home.qr_url} alt="UPI QR Code" className="qr-code" />}
-                  </div>
-                  <p className="qr-label">Scan to Donate via UPI</p>
-                  <button
-                    onClick={() => handleSelectHome(home)}
-                    className="donate-button"
-                  >
-                    Donate Now
-                  </button>
-                </div>
-              </motion.div>
-            ))
-          ) : (
-            <div className="no-homes">
-              <p>No homes available at the moment.</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <motion.div className="payment-section" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <div className="payment-header-close">
-            <h2 className="payment-title">Donate to {selectedHome?.name}</h2>
-            <button className="close-btn" onClick={() => setShowPayment(false)}>
-              <X size={24} />
+      {/* Main Content */}
+      <div style={{ padding: '0 40px 40px 40px', maxWidth: '1200px', margin: '0 auto' }}>
+        {loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            style={{
+              textAlign: 'center',
+              padding: '60px 20px',
+              background: 'white',
+              borderRadius: '16px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+            }}
+          >
+            <div style={{
+              width: '50px',
+              height: '50px',
+              border: '4px solid #f5576c',
+              borderTop: '4px solid transparent',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 20px'
+            }} />
+            <p style={{ fontSize: '18px', color: '#666' }}>Loading homes...</p>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </motion.div>
+        ) : error ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            style={{
+              textAlign: 'center',
+              padding: '40px',
+              background: 'white',
+              borderRadius: '16px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.1)'
+            }}
+          >
+            <AlertCircle size={48} color="#ef4444" style={{ marginBottom: '20px' }} />
+            <p style={{ fontSize: '18px', color: '#666', marginBottom: '20px' }}>{error}</p>
+            <button
+              onClick={fetchHomes}
+              style={{
+                padding: '12px 32px',
+                background: '#f5576c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Try Again
             </button>
-          </div>
-
-          <div className="qr-display">
-            {selectedHome?.qr_url && (
-              <img src={selectedHome.qr_url} alt="UPI QR Code" className="qr-large" />
-            )}
-            <p className="qr-instruction">Scan the QR code above using any UPI app to make payment</p>
-          </div>
-
-          <form onSubmit={handleSubmitTransaction} className="transaction-form">
-            <div className="form-group">
-              <label htmlFor="amount">Donation Amount (₹)</label>
-              <input
-                id="amount"
-                type="number"
-                name="amount"
-                placeholder="e.g., 500"
-                value={transactionData.amount}
-                onChange={handleInputChange}
-                required
-                className="input-field"
-              />
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="name">Your Name</label>
-                <input
-                  id="name"
-                  type="text"
-                  name="name"
-                  placeholder="Full Name"
-                  value={transactionData.name}
-                  onChange={handleInputChange}
-                  required
-                  className="input-field"
-                />
+          </motion.div>
+        ) : !showPayment ? (
+          <>
+            {/* Stats Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '20px',
+                marginBottom: '40px'
+              }}
+            >
+              <div style={{
+                background: 'white',
+                padding: '20px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f5576c', marginBottom: '10px' }}>
+                  {homes.length}
+                </div>
+                <div style={{ fontSize: '14px', color: '#666' }}>Homes Supported</div>
               </div>
-              <div className="form-group">
-                <label htmlFor="email">Email</label>
-                <input
-                  id="email"
-                  type="email"
-                  name="email"
-                  placeholder="your@email.com"
-                  value={transactionData.email}
-                  onChange={handleInputChange}
-                  required
-                  className="input-field"
-                />
+              <div style={{
+                background: 'white',
+                padding: '20px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🤝</div>
+                <div style={{ fontSize: '14px', color: '#666' }}>Community Care</div>
               </div>
-            </div>
+              <div style={{
+                background: 'white',
+                padding: '20px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>❤️</div>
+                <div style={{ fontSize: '14px', color: '#666' }}>Love & Support</div>
+              </div>
+            </motion.div>
 
-            <div className="form-group">
-              <label htmlFor="phone">Phone Number</label>
-              <input
-                id="phone"
-                type="tel"
-                name="phone"
-                placeholder="+91 99999 99999"
-                value={transactionData.phone}
-                onChange={handleInputChange}
-                required
-                className="input-field"
-              />
-            </div>
+            {/* Homes Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '30px'
+            }}>
+              {homes.length > 0 ? (
+                homes.map((home, idx) => (
+                  <motion.div
+                    key={home.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.1 }}
+                    whileHover={{ y: -8 }}
+                    style={{
+                      background: 'white',
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {/* Image */}
+                    <div style={{ position: 'relative', height: '200px', overflow: 'hidden' }}>
+                      {home.home_url ? (
+                        <img
+                          src={home.home_url}
+                          alt={home.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <span style={{ fontSize: '64px' }}>🏥</span>
+                        </div>
+                      )}
+                      <div style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: '#ef4444',
+                        color: 'white',
+                        padding: '8px 16px',
+                        borderRadius: '20px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}>
+                        <Heart size={16} /> Help Needed
+                      </div>
+                    </div>
 
-            <div className="form-group">
-              <label htmlFor="screenshot">Payment Proof Screenshot</label>
-              <label htmlFor="screenshot-input" className="file-upload-label">
-                <Upload size={20} />
-                <p>Click to upload or drag & drop</p>
-                <small>PNG, JPG, PDF (Max 5MB)</small>
-              </label>
-              <input
-                id="screenshot-input"
-                type="file"
-                accept="image/*,.pdf"
-                onChange={handleFileChange}
-                required
-                className="file-input-hidden"
-              />
-              {transactionData.screenshot && (
-                <p className="file-selected">{transactionData.screenshot.name}</p>
+                    {/* Content */}
+                    <div style={{ padding: '20px' }}>
+                      <h3 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#1f2937' }}>
+                        {home.name}
+                      </h3>
+
+                      {/* QR Code */}
+                      {home.qr_url && (
+                        <div style={{
+                          background: '#f3f4f6',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          marginBottom: '16px',
+                          textAlign: 'center'
+                        }}>
+                          <img
+                            src={home.qr_url}
+                            alt="UPI QR Code"
+                            style={{
+                              width: '120px',
+                              height: '120px',
+                              margin: '0 auto'
+                            }}
+                          />
+                          <p style={{
+                            margin: '8px 0 0 0',
+                            fontSize: '12px',
+                            color: '#666',
+                            fontWeight: '600'
+                          }}>
+                            Quick Donate via UPI
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Quick Stats */}
+                      <div style={{
+                        display: 'flex',
+                        gap: '10px',
+                        marginBottom: '16px',
+                        fontSize: '13px',
+                        color: '#666'
+                      }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Users size={14} /> Elderly Served
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <HeartIcon size={14} /> Care Provided
+                        </span>
+                      </div>
+
+                      {/* Donate Button */}
+                      <motion.button
+                        onClick={() => handleSelectHome(home)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        Donate Now
+                        <ArrowRight size={18} />
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <div style={{
+                  gridColumn: '1 / -1',
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  background: 'white',
+                  borderRadius: '16px'
+                }}>
+                  <p style={{ fontSize: '18px', color: '#666', margin: 0 }}>
+                    No homes available at the moment.
+                  </p>
+                </div>
               )}
             </div>
+          </>
+        ) : (
+          /* Payment Modal */
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '40px',
+              maxWidth: '500px',
+              margin: '0 auto',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.2)'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '30px'
+            }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>
+                Donate to {selectedHome?.name}
+              </h2>
+              <button
+                onClick={() => setShowPayment(false)}
+                style={{
+                  background: '#f3f4f6',
+                  border: 'none',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-            <div className="form-buttons">
-              <button type="submit" className="submit-button">Submit Donation Proof</button>
+            {/* QR Code */}
+            {selectedHome?.qr_url && (
+              <div style={{
+                background: '#f3f4f6',
+                padding: '30px',
+                borderRadius: '12px',
+                textAlign: 'center',
+                marginBottom: '30px'
+              }}>
+                <img
+                  src={selectedHome.qr_url}
+                  alt="UPI QR Code"
+                  style={{
+                    width: '200px',
+                    height: '200px',
+                    marginBottom: '15px'
+                  }}
+                />
+                <p style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  color: '#666',
+                  fontWeight: '500'
+                }}>
+                  📱 Scan with any UPI app to make payment
+                </p>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmitTransaction}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '6px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#1f2937'
+                }}>
+                  Donation Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  name="amount"
+                  placeholder="e.g., 500"
+                  value={transactionData.amount}
+                  onChange={handleInputChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                marginBottom: '16px'
+              }}>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#1f2937'
+                  }}>
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Your name"
+                    value={transactionData.name}
+                    onChange={handleInputChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    marginBottom: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#1f2937'
+                  }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="your@email.com"
+                    value={transactionData.email}
+                    onChange={handleInputChange}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '6px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#1f2937'
+                }}>
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  placeholder="+91 99999 99999"
+                  value={transactionData.phone}
+                  onChange={handleInputChange}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#1f2937'
+                }}>
+                  Payment Proof
+                </label>
+                <label style={{
+                  display: 'block',
+                  border: '2px dashed #f5576c',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}>
+                  <Upload size={24} color="#f5576c" style={{ margin: '0 auto 10px' }} />
+                  <p style={{ margin: '0 0 5px 0', fontWeight: '600', color: '#f5576c' }}>
+                    Click to upload
+                  </p>
+                  <small style={{ color: '#999' }}>PNG, JPG (Max 5MB)</small>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    required
+                    style={{ display: 'none' }}
+                  />
+                </label>
+                {transactionData.screenshot && (
+                  <p style={{
+                    marginTop: '10px',
+                    fontSize: '13px',
+                    color: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}>
+                    <Check size={16} /> {transactionData.screenshot.name}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  marginBottom: '10px'
+                }}
+              >
+                Submit Donation
+              </button>
               <button
                 type="button"
                 onClick={() => setShowPayment(false)}
-                className="back-button"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: '#f3f4f6',
+                  color: '#1f2937',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
               >
-                Back to List
+                Cancel
               </button>
-            </div>
-          </form>
-        </motion.div>
-      )}
+            </form>
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 };

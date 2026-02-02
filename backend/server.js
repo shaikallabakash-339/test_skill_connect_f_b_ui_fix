@@ -15,6 +15,7 @@ const adminRoutes = require("./routes/admin")
 const donationRoutes = require("./routes/donations")
 const subscriptionRoutes = require("./routes/subscriptions")
 const { initializeBuckets } = require("./utils/minioService")
+const { seedDatabase } = require("./scripts/seed-db")
 const { pool, testConnection } = require("./config/database")
 require("dotenv").config()
 
@@ -109,5 +110,13 @@ app.listen(PORT, async () => {
     console.log('✓ MinIO buckets initialized');
   } catch (err) {
     console.error('Error initializing MinIO:', err);
+  }
+
+  // Seed database with default data
+  try {
+    await seedDatabase();
+    console.log('✓ Database seeding completed');
+  } catch (err) {
+    console.error('Error seeding database:', err);
   }
 });

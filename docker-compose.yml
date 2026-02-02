@@ -75,7 +75,7 @@ services:
       - "5000:5000"
     environment:
       # App Config
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 5000
       
       # Database Configuration
@@ -87,12 +87,14 @@ services:
       DATABASE_URL: postgres://postgres:postgres123@postgres:5432/skill_connect
       
       # MinIO Configuration
+      MINIO_HOST: minio
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
       MINIO_USE_SSL: false
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin@123456
       MINIO_BUCKET: skill-connect-bucket
+      MINIO_API_URL: http://minio:9000
       
       # Email Configuration - Mailpit (Local Testing)
       MAILPIT_HOST: mailpit
@@ -110,6 +112,12 @@ services:
       - /app/node_modules
     networks:
       - skill_connect_network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # -------- FRONTEND --------
   frontend:
@@ -119,20 +127,22 @@ services:
     container_name: skill_connect_frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
-      # CRITICAL: Browser on Windows needs http://localhost:5000, not http://backend:5000
-      # The container exposes ports to localhost, so browser uses localhost
       REACT_APP_API_URL: http://localhost:5000
-      REACT_APP_ENV: development
-      NODE_ENV: development
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
+      REACT_APP_ENV: production
+      NODE_ENV: production
     networks:
       - skill_connect_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   pgdata:

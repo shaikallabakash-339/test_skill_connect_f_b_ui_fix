@@ -12,6 +12,7 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -81,8 +82,10 @@ function Login() {
         errorMsg = 'Invalid email or password. Please try again.';
       } else if (err.response?.status === 503) {
         errorMsg = 'Server is not ready. Please try again in a moment.';
-      } else if (err.message === 'Network Error') {
-        errorMsg = 'Cannot connect to server. Please check your connection.';
+      } else if (err.code === 'ECONNREFUSED' || err.message === 'Network Error') {
+        errorMsg = 'Cannot connect to server. Please ensure the backend is running on http://localhost:5000';
+      } else if (err.message.includes('timeout')) {
+        errorMsg = 'Request timeout. Please check your connection and try again.';
       }
       
       setError(errorMsg);
