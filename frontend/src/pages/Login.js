@@ -31,7 +31,6 @@ function Login() {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    setSuccessMessage('');
 
     if (!formData.email || !formData.password) {
       const errMsg = 'Please fill in all fields';
@@ -57,7 +56,6 @@ function Login() {
         // Store user data
         localStorage.setItem('user', JSON.stringify(res.data.user));
         localStorage.setItem('token', res.data.token || '');
-        setSuccessMessage(successMsg);
         
         // Redirect after toast
         setTimeout(() => {

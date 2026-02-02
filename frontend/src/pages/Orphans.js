@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Upload, X, AlertCircle, Heart, Share2, Clock, MapPin, Users, Book, ArrowRight, Check } from 'lucide-react';
+import { Upload, X, AlertCircle, Heart, Users, Book, ArrowRight, Check } from 'lucide-react';
 import '../styles/donations.css';
 
 const Orphans = () => {
@@ -44,6 +44,7 @@ const Orphans = () => {
 
   useEffect(() => {
     fetchOrphans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectOrphan = (orphan) => {

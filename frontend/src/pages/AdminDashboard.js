@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { motion } from 'framer-motion';
-import { Eye, Download, Check, X, Clock, User, FileText, MessageSquare, Upload, Image as ImageIcon, Send, Zap, Mail } from 'lucide-react';
+import { Home, Settings, LogOut } from 'lucide-react';
 import Footer from '../components/Footer';
 import { showToast } from '../utils/toast';
 import '../styles/admin-dashboard.css';
@@ -30,9 +30,6 @@ function AdminDashboard() {
   const [pendingSubscriptions, setPendingSubscriptions] = useState([]);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [selectedSubscription, setSelectedSubscription] = useState(null);
-  const [paymentScreenshots, setPaymentScreenshots] = useState([]);
-  const [selectedScreenshot, setSelectedScreenshot] = useState(null);
-  const [showScreenshotModal, setShowScreenshotModal] = useState(false);
 
   // Donation-related states
   const [qrUpload, setQrUpload] = useState({ name: '', type: 'old-age', qrImage: null, homeImage: null });
@@ -52,7 +49,6 @@ function AdminDashboard() {
   // Announcements State
   const [announcement, setAnnouncement] = useState({ title: '', message: '' });
   const [messageToCategory, setMessageToCategory] = useState({ category: 'all', message: '' });
-  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
 
   // Subscription QR State
   const [subscriptionQr, setSubscriptionQr] = useState({ monthly: null, yearly: null });
@@ -239,39 +235,6 @@ function AdminDashboard() {
     }
   };
 
-  const handleVerifyPaymentScreenshot = async (screenshotId, approve = true) => {
-    try {
-      const endpoint = approve 
-        ? `${apiUrl}/api/payment-screenshots/${screenshotId}/approve`
-        : `${apiUrl}/api/payment-screenshots/${screenshotId}/reject`;
-      
-      const res = await axios.post(endpoint);
-      if (res.data.success) {
-        showToast(`Payment screenshot ${approve ? 'approved' : 'rejected'}!`, 'success');
-        fetchPaymentScreenshots();
-        setShowScreenshotModal(false);
-        setSelectedScreenshot(null);
-      }
-    } catch (err) {
-      console.error('Error verifying payment screenshot:', err);
-      showToast('Failed to verify payment screenshot', 'error');
-    }
-  };
-
-  const handleMarkUserPremium = async (userId) => {
-    try {
-      const res = await axios.post(`${apiUrl}/api/users/${userId}/mark-premium`);
-      if (res.data.success) {
-        showToast('User marked as premium!', 'success');
-        fetchUsers();
-        fetchPaymentScreenshots();
-      }
-    } catch (err) {
-      console.error('Error marking user as premium:', err);
-      showToast('Failed to mark user as premium', 'error');
-    }
-  };
-
   const handleSendAnnouncement = async (e) => {
     e.preventDefault();
     try {
@@ -279,25 +242,10 @@ function AdminDashboard() {
       if (res.data.success) {
         showToast('Announcement sent!', 'success');
         setAnnouncement({ title: '', message: '' });
-        setShowAnnouncementModal(false);
       }
     } catch (err) {
       console.error('Error sending announcement:', err);
       showToast('Failed to send announcement', 'error');
-    }
-  };
-
-  const handleSendMessageToCategory = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await axios.post(`${apiUrl}/api/send-message-category`, messageToCategory);
-      if (res.data.success) {
-        showToast('Message sent to category!', 'success');
-        setMessageToCategory({ category: 'all', message: '' });
-      }
-    } catch (err) {
-      console.error('Error sending message:', err);
-      showToast('Failed to send message', 'error');
     }
   };
 

@@ -57,9 +57,6 @@ function UserDashboard() {
   // Profile Photo State
   const [photoUploading, setPhotoUploading] = useState(false);
 
-  // Premium Modal State
-  const [showPremiumWarning, setShowPremiumWarning] = useState(false);
-
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
   // Initialize user and fetch data
