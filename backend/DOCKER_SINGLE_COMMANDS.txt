@@ -1,0 +1,226 @@
+================================================================================
+DOCKER SINGLE-LINE COMMANDS FOR TESTING (Local PC)
+================================================================================
+
+Use these commands to test each service individually on your local machine.
+Open separate terminals for each command.
+
+================================================================================
+DATABASE - PostgreSQL (Terminal 1)
+================================================================================
+
+One-Line Command:
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_DB=skill_connect_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 postgres:15
+
+Verify it's running:
+docker logs postgres
+
+Test connection:
+psql -h localhost -U admin -d skill_connect_db -W
+
+================================================================================
+STORAGE - MinIO (Terminal 2)
+================================================================================
+
+One-Line Command:
+docker run -d --name minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin123 minio/minio:latest server /data --console-address ":9001"
+
+Access Web Console:
+http://localhost:9001
+Username: minioadmin
+Password: minioadmin123
+
+================================================================================
+EMAIL SERVICE - Mailpit (Terminal 3)
+================================================================================
+
+One-Line Command:
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+
+Access Web Interface:
+http://localhost:8025
+
+================================================================================
+CREATE DOCKER NETWORK (Optional - Terminal 4)
+================================================================================
+
+Command:
+docker network create skill_connect_net
+
+Connect services to network:
+docker network connect skill_connect_net postgres
+docker network connect skill_connect_net minio
+docker network connect skill_connect_net mailpit
+
+================================================================================
+BACKEND - Node.js (Terminal 5) - CD to backend folder first
+================================================================================
+
+Install dependencies:
+npm install
+
+Run Backend (Windows PowerShell):
+$env:DB_HOST="localhost"; $env:DB_PORT="5432"; $env:DB_NAME="skill_connect_db"; $env:DB_USER="admin"; $env:DB_PASSWORD="admin123"; $env:MINIO_ENDPOINT="localhost"; $env:MINIO_PORT="9000"; $env:MINIO_USER="minioadmin"; $env:MINIO_PASSWORD="minioadmin123"; $env:MAILPIT_HOST="localhost"; $env:MAILPIT_PORT="1025"; $env:ADMIN_EMAIL="admin@skillconnect.com"; $env:ADMIN_PASSWORD="admin123"; $env:NODE_ENV="development"; npm start
+
+Run Backend (Linux/Mac):
+DB_HOST=localhost DB_PORT=5432 DB_NAME=skill_connect_db DB_USER=admin DB_PASSWORD=admin123 MINIO_ENDPOINT=localhost MINIO_PORT=9000 MINIO_USER=minioadmin MINIO_PASSWORD=minioadmin123 MAILPIT_HOST=localhost MAILPIT_PORT=1025 ADMIN_EMAIL=admin@skillconnect.com ADMIN_PASSWORD=admin123 NODE_ENV=development npm start
+
+Backend will run on:
+http://localhost:5000
+
+================================================================================
+FRONTEND - React (Terminal 6) - CD to frontend folder first
+================================================================================
+
+Install dependencies:
+npm install
+
+Run Frontend (Windows PowerShell):
+$env:REACT_APP_API_URL="http://localhost:5000"; npm start
+
+Run Frontend (Linux/Mac):
+REACT_APP_API_URL=http://localhost:5000 npm start
+
+Frontend will run on:
+http://localhost:3000
+
+================================================================================
+ALL AT ONCE - Docker Compose (Terminal 1)
+================================================================================
+
+Create .env file first with these contents:
+DB_NAME=skill_connect_db
+DB_USER=admin
+DB_PASSWORD=admin123
+DB_HOST=postgres
+DB_PORT=5432
+MINIO_USER=minioadmin
+MINIO_PASSWORD=minioadmin123
+MINIO_BUCKET=skill-connect-bucket
+MAILPIT_HOST=mailpit
+MAILPIT_PORT=1025
+ADMIN_EMAIL=admin@skillconnect.com
+ADMIN_PASSWORD=admin123
+REACT_APP_API_URL=http://localhost:5000
+NODE_ENV=development
+
+One-Line Command:
+docker-compose up -d
+
+Check status:
+docker-compose ps
+
+View logs:
+docker-compose logs -f
+
+Stop everything:
+docker-compose down
+
+================================================================================
+USEFUL COMMANDS
+================================================================================
+
+View all running containers:
+docker ps
+
+View container logs:
+docker logs <container_name>
+
+Stop a container:
+docker stop <container_name>
+
+Remove a container:
+docker rm <container_name>
+
+View resource usage:
+docker stats
+
+Remove all stopped containers:
+docker container prune
+
+Remove all unused images:
+docker image prune
+
+Clean everything (CAUTION - removes all data):
+docker system prune -a --volumes
+
+================================================================================
+ACCESS POINTS AFTER STARTING
+================================================================================
+
+Frontend Application:
+http://localhost:3000
+
+Backend API:
+http://localhost:5000
+http://localhost:5000/api/health (health check)
+
+MinIO Console (Storage):
+http://localhost:9001
+Username: minioadmin
+Password: minioadmin123
+
+Mailpit (Email Testing):
+http://localhost:8025
+
+PostgreSQL Database:
+Host: localhost
+Port: 5432
+Database: skill_connect_db
+Username: admin
+Password: admin123
+
+================================================================================
+TEST ENDPOINTS
+================================================================================
+
+Health Check:
+curl http://localhost:5000/api/health
+
+Signup:
+curl -X POST http://localhost:5000/api/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","fullName":"Test User","password":"test123","status":"employed"}'
+
+Login:
+curl -X POST http://localhost:5000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"test123"}'
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Port already in use (5000, 3000, 5432, etc.):
+Windows: netstat -ano | findstr :5000
+Linux/Mac: lsof -i :5000
+
+Kill process:
+Windows: taskkill /PID <PID> /F
+Linux/Mac: kill -9 <PID>
+
+PostgreSQL connection issues:
+1. Check PostgreSQL is running: docker logs postgres
+2. Verify credentials in .env file
+3. Test connection: psql -h localhost -U admin -d skill_connect_db
+
+Backend not connecting to PostgreSQL:
+1. Ensure PostgreSQL container is running
+2. Check Docker network: docker network ls
+3. For Docker containers, use container name as host (not localhost)
+
+Frontend not connecting to backend:
+1. Check REACT_APP_API_URL environment variable
+2. Verify backend is running: http://localhost:5000/api/health
+3. Check browser console for CORS errors
+
+================================================================================
+PRODUCTION DEPLOYMENT
+================================================================================
+
+For production, use:
+docker-compose -f docker-compose.prod.yml up -d
+
+See DOCKER_LOCAL_SETUP.md for full production setup guide
+
+================================================================================

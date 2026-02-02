@@ -1,0 +1,148 @@
+================================================================================
+                    INDIVIDUAL DOCKER COMMANDS FOR TESTING
+                    (Run each in a separate terminal)
+================================================================================
+
+1. POSTGRESQL DATABASE
+================================================================================
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_DB=skill_connect_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 postgres:15
+
+Check if running:
+docker logs postgres
+
+Connect to database:
+psql -h localhost -U admin -d skill_connect_db -W
+
+================================================================================
+
+2. MINIO (Object Storage)
+================================================================================
+docker run -d --name minio -p 9000:9000 -p 9001:9001 \
+  -e MINIO_ROOT_USER=minioadmin \
+  -e MINIO_ROOT_PASSWORD=minioadmin123 \
+  minio/minio:latest server /data --console-address ":9001"
+
+Access MinIO Console: http://localhost:9001
+Login: minioadmin / minioadmin123
+
+================================================================================
+
+3. MAILPIT (Email Testing)
+================================================================================
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+
+Access Mailpit Web: http://localhost:8025
+SMTP: localhost:1025 (no auth required)
+
+================================================================================
+
+4. REDIS (Optional - for caching)
+================================================================================
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+Test connection:
+docker exec redis redis-cli ping
+
+================================================================================
+
+5. BACKEND (Node.js)
+================================================================================
+# Prerequisites: Make sure postgres, minio, and mailpit are running
+
+# Development mode:
+cd backend
+npm install
+DB_HOST=localhost DB_PORT=5432 DB_NAME=skill_connect_db DB_USER=admin DB_PASSWORD=admin123 \
+MINIO_ENDPOINT=localhost MINIO_PORT=9000 MINIO_USER=minioadmin MINIO_PASSWORD=minioadmin123 \
+MAILPIT_HOST=localhost MAILPIT_PORT=1025 \
+NODE_ENV=development npm start
+
+# Or run in Docker after testing locally:
+docker run -d --name backend -p 5000:5000 \
+  --network host \
+  -e DB_HOST=localhost \
+  -e DB_PORT=5432 \
+  -e DB_NAME=skill_connect_db \
+  -e DB_USER=admin \
+  -e DB_PASSWORD=admin123 \
+  -e MINIO_ENDPOINT=localhost \
+  -e MINIO_PORT=9000 \
+  -e MINIO_USER=minioadmin \
+  -e MINIO_PASSWORD=minioadmin123 \
+  -e MAILPIT_HOST=localhost \
+  -e MAILPIT_PORT=1025 \
+  -e NODE_ENV=development \
+  backend:latest
+
+================================================================================
+
+6. FRONTEND (React)
+================================================================================
+# Prerequisites: Backend should be running
+
+cd frontend
+npm install
+REACT_APP_API_URL=http://localhost:5000 npm start
+
+# Or run in Docker:
+docker run -d --name frontend -p 3000:3000 \
+  -e REACT_APP_API_URL=http://localhost:5000 \
+  frontend:latest
+
+================================================================================
+
+COMPLETE STARTUP SEQUENCE (Copy & Paste)
+================================================================================
+
+# Terminal 1 - PostgreSQL
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_DB=skill_connect_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 postgres:15
+
+# Terminal 2 - MinIO
+docker run -d --name minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin123 minio/minio:latest server /data --console-address ":9001"
+
+# Terminal 3 - Mailpit
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+
+# Terminal 4 - Backend
+cd backend && DB_HOST=localhost DB_PORT=5432 DB_NAME=skill_connect_db DB_USER=admin DB_PASSWORD=admin123 MINIO_ENDPOINT=localhost MINIO_PORT=9000 MINIO_USER=minioadmin MINIO_PASSWORD=minioadmin123 MAILPIT_HOST=localhost MAILPIT_PORT=1025 npm start
+
+# Terminal 5 - Frontend
+cd frontend && REACT_APP_API_URL=http://localhost:5000 npm start
+
+================================================================================
+
+CLEANUP COMMANDS
+================================================================================
+
+# Stop all containers
+docker stop postgres minio mailpit backend frontend
+
+# Remove all containers
+docker rm postgres minio mailpit backend frontend
+
+# Remove images
+docker rmi backend:latest frontend:latest
+
+# Clean all
+docker system prune -a
+
+================================================================================
+
+TESTING ENDPOINTS
+================================================================================
+
+Frontend: http://localhost:3000
+Backend API: http://localhost:5000/api
+MinIO Console: http://localhost:9001
+Mailpit: http://localhost:8025
+PostgreSQL: localhost:5432
+
+Admin Credentials:
+Email: admin@skillconnect.com
+Password: admin123
+
+User Test Signup:
+Email: test@example.com
+Password: test123456
+
+================================================================================

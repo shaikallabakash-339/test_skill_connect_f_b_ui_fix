@@ -1,0 +1,259 @@
+================================================================================
+                    SKILL CONNECT - EXACT COMMANDS TO RUN
+================================================================================
+
+STEP 1: Clean Start (First Time ONLY)
+================================================================================
+
+Make the cleanup script executable:
+$ chmod +x CLEANUP_AND_RESTART.sh
+
+Run the cleanup and restart script:
+$ bash CLEANUP_AND_RESTART.sh
+
+What this does:
+- Stops all containers
+- Removes all volumes (fresh database)
+- Kills processes on ports 1025, 3000, 5000, 5432, 8025, 9000, 9001
+- Rebuilds all Docker images
+- Starts all services
+- Waits for each service to be ready
+- Shows access URLs
+
+The script will take 2-5 minutes depending on your internet connection.
+It shows progress messages like:
+  [1/5] Stopping all containers...
+  [2/5] Removing orphaned containers...
+  [3/5] Removing orphaned volumes...
+  [4/5] Killing any processes on ports...
+  [5/5] Starting fresh containers with rebuild...
+  
+Then it waits for services:
+  Waiting for PostgreSQL...
+  ✓ PostgreSQL is ready
+  Waiting for Backend API...
+  ✓ Backend API is ready
+  Waiting for Frontend...
+  ✓ Frontend is ready
+
+
+STEP 2: Test the Application
+================================================================================
+
+Open your browser and go to:
+  http://localhost:3000
+
+You should see:
+  - Skill Connect login page
+  - "Sign Up" button
+
+Click "Sign Up" and fill in the form:
+  - Email: test@example.com
+  - Full Name: Test User
+  - Password: Test@123
+  - Status: Student/Professional/etc
+  - Phone: 1234567890
+  - Other fields: optional
+
+Click "Submit"
+
+Expected: You'll see a success message and be redirected to login
+
+
+STEP 3: Verify Data Was Saved to Database
+================================================================================
+
+Open a terminal and run:
+
+$ docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT email, fullname, status FROM users;"
+
+Expected output (something like this):
+       email       |  fullname   | status
+-------------------+-------------+---------
+ test@example.com  | Test User   | pursuing
+(1 row)
+
+If you see your email/name in the output = ✓ SUCCESS!
+
+
+STEP 4: Check Password is Encrypted
+================================================================================
+
+Run this command to verify password is hashed (NOT stored as plaintext):
+
+$ docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT password FROM users LIMIT 1;"
+
+Expected output (something like this):
+                        password
+---------------------------------------------------
+ $2a$10$xyzABCnm1234567890abcdefghijklmnopqrstuv
+
+If password starts with $2a$ = ✓ PASSWORD IS ENCRYPTED (Good!)
+If password is plaintext = ✗ Problem (shouldn't happen with new code)
+
+
+STEP 5: Test Email (Optional)
+================================================================================
+
+Go to: http://localhost:8025
+
+This is Mailpit - shows emails sent by the application
+(No actual emails are sent - they're captured here for testing)
+
+
+STEP 6: Test File Storage (Optional)
+================================================================================
+
+Go to: http://localhost:9001
+
+Username: minioadmin
+Password: minioadmin123
+
+This is MinIO - S3-compatible storage for file uploads
+
+
+================================================================================
+SUBSEQUENT RESTARTS (After First Time)
+================================================================================
+
+If you stop and want to restart:
+
+$ docker-compose up -d
+
+Wait 30-45 seconds, then access:
+$ http://localhost:3000
+
+
+================================================================================
+VIEW LOGS (If Something Goes Wrong)
+================================================================================
+
+All logs:
+$ docker-compose logs -f
+
+Backend only:
+$ docker-compose logs -f backend
+
+Frontend only:
+$ docker-compose logs -f frontend
+
+Database only:
+$ docker-compose logs -f postgres
+
+
+================================================================================
+STOP EVERYTHING
+================================================================================
+
+Stop all containers (keeps data):
+$ docker-compose down
+
+Stop and delete all data (fresh start):
+$ docker-compose down -v
+
+
+================================================================================
+IF SOMETHING GOES WRONG
+================================================================================
+
+If signup doesn't save or database error:
+
+1. Check logs:
+   $ docker-compose logs backend | grep -i "error\|database"
+
+2. Check if database is ready:
+   $ curl http://localhost:5000/api/ready
+
+3. If issues persist, run cleanup again:
+   $ bash CLEANUP_AND_RESTART.sh
+
+4. If ports are still in use, force cleanup:
+   $ docker system prune -a -f
+   $ docker volume prune -f
+   $ bash CLEANUP_AND_RESTART.sh
+
+
+================================================================================
+ACCESS URLS (After Services Are Ready)
+================================================================================
+
+Frontend:           http://localhost:3000
+Backend API:        http://localhost:5000
+Database:           localhost:5432 (user: admin, pass: admin123)
+Mailpit (Email):    http://localhost:8025
+MinIO (Storage):    http://localhost:9001 (user: minioadmin, pass: minioadmin123)
+
+Health Check:       curl http://localhost:5000/health
+Ready Check:        curl http://localhost:5000/api/ready
+
+
+================================================================================
+COMMON TEST CREDENTIALS
+================================================================================
+
+Default Admin User:
+- Email: admin@skillconnect.com
+- Password: admin123 (change in production)
+
+Database:
+- User: admin
+- Password: admin123
+- Database: skill_connect_db
+- Host: localhost:5432
+
+MinIO:
+- Access Key: minioadmin
+- Secret Key: minioadmin123
+
+Mailpit:
+- No credentials needed (testing service)
+
+
+================================================================================
+EXPECTED SUCCESS INDICATORS
+================================================================================
+
+✓ All containers running:
+  $ docker-compose ps
+  Shows all 5 containers with "Up" status
+
+✓ Backend responding:
+  $ curl http://localhost:5000/health
+  Returns JSON with status: "OK" and database: "connected"
+
+✓ Frontend loads:
+  $ curl http://localhost:3000
+  Returns HTML (not an error)
+
+✓ Signup works:
+  - Form submits without error
+  - Success message appears
+  - Page redirects to login
+
+✓ Data in database:
+  Run verification commands above
+  Your signup data appears in database
+
+✓ Password encrypted:
+  Password in database starts with $2a$ (not plaintext)
+
+✓ Email service ready:
+  Mailpit UI loads at http://localhost:8025
+  (May or may not have emails if not configured in signup)
+
+✓ File storage ready:
+  MinIO UI loads at http://localhost:9001
+  Can login with minioadmin/minioadmin123
+
+
+================================================================================
+
+You're all set! All database, MinIO, Mailpit, and connectivity issues are FIXED.
+
+Start with: bash CLEANUP_AND_RESTART.sh
+
+Then access: http://localhost:3000
+
+Good luck! 🚀
+
+================================================================================

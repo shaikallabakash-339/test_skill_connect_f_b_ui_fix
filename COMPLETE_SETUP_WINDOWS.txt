@@ -1,0 +1,313 @@
+================================================================================
+COMPLETE SETUP GUIDE FOR WINDOWS - SKILL CONNECT
+================================================================================
+
+CRITICAL NETWORK FIX
+====================
+The main issue was: Frontend (browser on Windows) tried to call Docker container 
+name "backend:5000" which doesn't exist in Windows network.
+
+SOLUTION: Frontend now uses http://localhost:5000 which works from Windows browser.
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        STEP-BY-STEP SETUP                                 ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+STEP 1: CLEAN UP EVERYTHING
+============================
+Open Command Prompt (as Administrator) and run:
+
+  docker-compose down -v
+  docker system prune -a -f
+  docker volume prune -f
+
+This removes:
+- All containers
+- All images
+- All volumes (databases, cache)
+- All networks
+
+STEP 2: VERIFY DOCKER IS WORKING
+=================================
+Run:
+  docker --version
+  docker ps
+
+Expected output:
+- Docker version (e.g., Docker version 20.10.21, build baeda1f)
+- Empty container list
+
+STEP 3: BUILD AND START EVERYTHING
+===================================
+In the project root directory, run:
+
+  docker-compose up -d --build
+
+This will:
+1. Build backend image
+2. Build frontend image
+3. Start PostgreSQL (creates fresh database)
+4. Start MinIO (file storage)
+5. Start Mailpit (email testing)
+6. Start Backend API (port 5000)
+7. Start Frontend React app (port 3000)
+
+STEP 4: WAIT FOR SERVICES TO START
+===================================
+Run:
+  docker-compose ps
+
+Wait until all containers show "Up":
+- skill_connect_postgres (should show "healthy")
+- skill_connect_backend (should show "Up")
+- skill_connect_frontend (should show "Up")
+- skill_connect_minio (should show "Up")
+- skill_connect_mailpit (should show "Up")
+
+Takes 30-60 seconds on first run.
+
+Check logs if any container is not "Up":
+  docker-compose logs backend
+  docker-compose logs frontend
+  docker-compose logs postgres
+
+STEP 5: ACCESS THE APPLICATION
+===============================
+Once all containers are "Up", open your browser on Windows PC:
+
+FRONTEND:           http://localhost:3000
+BACKEND API:        http://localhost:5000
+DATABASE UI:        http://localhost:9001 (MinIO - username: minioadmin, password: minioadmin123)
+EMAIL UI:           http://localhost:8025 (Mailpit - view sent emails)
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        TESTING SIGNUP & LOGIN                             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+TEST SIGNUP
+===========
+1. Go to http://localhost:3000
+2. Click "Sign Up" button
+3. Fill in form:
+   - Email: testuser@example.com
+   - Full Name: Test User
+   - Password: Test@123456
+   - Phone: 1234567890
+   - City: New York
+   - Status: pursuing (or other option)
+4. Click "Create Account"
+5. EXPECTED: Green toast shows "Account created successfully!"
+6. Auto-redirects to login after 3 seconds
+
+VERIFY DATA IN DATABASE
+=======================
+Run this command to verify data was saved:
+
+  docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT email, fullname, status FROM users;"
+
+Expected output - one row:
+  email             | fullname  | status
+  testuser@example.com | Test User | pursuing
+
+TEST LOGIN
+==========
+1. After signup, you're on login page
+2. Enter credentials:
+   - Email: testuser@example.com
+   - Password: Test@123456
+3. Click "Sign In"
+4. EXPECTED: Green toast shows "Welcome back, Test User! Redirecting..."
+5. Auto-redirects to dashboard after 2 seconds
+6. Dashboard loads with your profile data
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        TROUBLESHOOTING                                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+ERROR: "Cannot connect to server. Please check your connection."
+=================================================================
+This means Frontend (browser) cannot reach Backend API.
+
+Check 1: Is backend running?
+  docker-compose ps backend
+  Should show "Up"
+
+Check 2: Check backend logs for errors
+  docker-compose logs backend
+  
+Check 3: Verify backend is listening on port 5000
+  docker-compose logs backend | grep -i "5000\|listening"
+  
+Check 4: Test connection from Windows command line
+  telnet localhost 5000
+  (If connection refused, backend is not listening on 5000)
+
+Check 5: Restart backend
+  docker-compose restart backend
+  Wait 5 seconds, try signup again
+
+ERROR: "Database tables do not exist"
+=====================================
+This means database initialization failed.
+
+Check PostgreSQL logs:
+  docker-compose logs postgres
+  
+Reinitialize database:
+  docker-compose down -v
+  docker-compose up -d
+  Wait 60 seconds for database to initialize
+
+ERROR: Port 5000 already in use
+================================
+This means another application is using port 5000.
+
+Kill the process:
+  netstat -ano | findstr :5000
+  (Note the PID number)
+  
+  taskkill /PID <PID> /F
+
+Then restart Docker:
+  docker-compose restart backend
+
+ERROR: Port 3000 already in use
+================================
+Similarly, kill the process on port 3000:
+  netstat -ano | findstr :3000
+  taskkill /PID <PID> /F
+  
+  docker-compose restart frontend
+
+ERROR: "Cannot find module 'react-toastify'"
+==============================================
+Dependencies not installed.
+
+Fix:
+  docker-compose down
+  docker-compose up -d --build
+  
+Wait for frontend to rebuild.
+
+ERROR: Docker won't start
+=========================
+Make sure Docker Desktop is running:
+- On Windows, open Docker Desktop application
+- Wait for "Docker Desktop is running" message
+- Try again
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        USEFUL DOCKER COMMANDS                             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+View all logs:
+  docker-compose logs -f
+
+View specific service logs:
+  docker-compose logs -f backend
+  docker-compose logs -f frontend
+  docker-compose logs -f postgres
+
+Stop everything:
+  docker-compose down
+
+Stop and remove all data:
+  docker-compose down -v
+
+Rebuild images:
+  docker-compose up -d --build
+
+Connect to PostgreSQL database:
+  docker-compose exec postgres psql -U admin -d skill_connect_db
+
+Run a query in database:
+  docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT * FROM users;"
+
+View file uploads (MinIO):
+  docker-compose logs minio
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        NETWORK ARCHITECTURE                               ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+WINDOWS BROWSER (Your PC)
+         ↓
+  http://localhost:3000  (Frontend React App)
+         ↓
+  http://localhost:5000  (Backend API - CRITICAL: must be localhost, NOT "backend")
+         ↓
+  http://localhost:5432  (PostgreSQL Database)
+
+KEY POINT:
+Your Windows browser CANNOT resolve Docker container names like "backend" or 
+"postgres". It can only use "localhost" to reach Docker exposed ports.
+
+Container-to-Container communication (inside Docker) uses container names:
+  frontend container → http://backend:5000 (works inside Docker)
+  backend container → http://postgres:5432 (works inside Docker)
+
+But Browser-to-Container communication (from Windows) must use localhost:
+  Windows browser → http://localhost:5000 (works from Windows)
+  Windows browser → http://localhost:3000 (works from Windows)
+
+This is why the fix was to change REACT_APP_API_URL to http://localhost:5000
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        WHAT SHOULD HAPPEN                                 ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+Successful Signup Flow:
+1. User fills signup form
+2. Clicks "Create Account"
+3. Green toast: "Account created successfully!"
+4. Auto-redirects to login page
+5. Info toast: "Account created! Please login..."
+6. Data appears in PostgreSQL:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT * FROM users WHERE email='testuser@example.com';"
+
+Successful Login Flow:
+1. User enters email and password
+2. Clicks "Sign In"
+3. Green toast: "Welcome back, [Name]! Redirecting..."
+4. Auto-redirects to dashboard
+5. Dashboard shows user profile data
+
+File Upload (Resume):
+1. User goes to profile
+2. Uploads PDF file
+3. Toast: "File uploaded successfully"
+4. File stored in MinIO storage
+
+Email Verification:
+1. Any signup/message triggers email
+2. Go to http://localhost:8025
+3. See email in Mailpit inbox
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        FINAL VERIFICATION                                 ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+After setup, verify everything with this checklist:
+
+[ ] docker-compose ps shows all 5 containers as "Up"
+[ ] http://localhost:3000 opens frontend (should see signup page)
+[ ] http://localhost:5000/health returns 200 status (API is running)
+[ ] Signup with test data works
+[ ] Green success toast appears
+[ ] Data appears in database
+[ ] Login with same credentials works
+[ ] Welcome toast appears
+[ ] Can access http://localhost:8025 (Mailpit)
+[ ] Can access http://localhost:9001 (MinIO)
+
+If all above are done, your application is FULLY WORKING!
+
+================================================================================
+                            READY TO USE!
+================================================================================
+
+Run: docker-compose up -d
+Open: http://localhost:3000
+Test signup and login!
+
+For questions, check logs: docker-compose logs -f

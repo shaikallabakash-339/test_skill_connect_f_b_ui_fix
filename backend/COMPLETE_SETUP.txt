@@ -1,0 +1,298 @@
+================================================================================
+                    COMPLETE SETUP AND DOCKER GUIDE
+                    Skill Connect Platform
+================================================================================
+
+IMPORTANT: Run each command in a SEPARATE terminal/command prompt
+
+================================================================================
+                    STEP 1: DATABASE (PostgreSQL)
+================================================================================
+
+WINDOWS (PowerShell):
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_DB=skill_connect_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 postgres:15
+
+LINUX/MAC:
+docker run -d --name postgres -p 5432:5432 -e POSTGRES_DB=skill_connect_db -e POSTGRES_USER=admin -e POSTGRES_PASSWORD=admin123 postgres:15
+
+VERIFY:
+docker logs postgres
+docker exec postgres psql -U admin -d skill_connect_db -c "SELECT version();"
+
+================================================================================
+                    STEP 2: MinIO (File Storage)
+================================================================================
+
+WINDOWS (PowerShell):
+docker run -d --name minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin123 minio/minio:latest server /data --console-address ":9001"
+
+LINUX/MAC:
+docker run -d --name minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin123 minio/minio:latest server /data --console-address ":9001"
+
+ACCESS:
+URL: http://localhost:9001
+Username: minioadmin
+Password: minioadmin123
+
+================================================================================
+                    STEP 3: Mailpit (Email Testing)
+================================================================================
+
+WINDOWS (PowerShell):
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+
+LINUX/MAC:
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
+
+ACCESS:
+URL: http://localhost:8025
+SMTP: localhost:1025 (no auth needed)
+
+================================================================================
+                    STEP 4: Backend (Node.js Server)
+================================================================================
+
+PREREQUISITE:
+- Open new terminal/command prompt
+- Navigate to: cd backend
+
+INSTALLATION:
+npm install
+
+WINDOWS (PowerShell - One Line):
+$env:DB_HOST="localhost"; $env:DB_PORT="5432"; $env:DB_NAME="skill_connect_db"; $env:DB_USER="admin"; $env:DB_PASSWORD="admin123"; $env:MINIO_ENDPOINT="localhost"; $env:MINIO_PORT="9000"; $env:MINIO_USER="minioadmin"; $env:MINIO_PASSWORD="minioadmin123"; $env:MAILPIT_HOST="localhost"; $env:MAILPIT_PORT="1025"; $env:NODE_ENV="development"; npm start
+
+WINDOWS (Command Prompt - One Line):
+set DB_HOST=localhost && set DB_PORT=5432 && set DB_NAME=skill_connect_db && set DB_USER=admin && set DB_PASSWORD=admin123 && set MINIO_ENDPOINT=localhost && set MINIO_PORT=9000 && set MINIO_USER=minioadmin && set MINIO_PASSWORD=minioadmin123 && set MAILPIT_HOST=localhost && set MAILPIT_PORT=1025 && set NODE_ENV=development && npm start
+
+LINUX/MAC (One Line):
+DB_HOST=localhost DB_PORT=5432 DB_NAME=skill_connect_db DB_USER=admin DB_PASSWORD=admin123 MINIO_ENDPOINT=localhost MINIO_PORT=9000 MINIO_USER=minioadmin MINIO_PASSWORD=minioadmin123 MAILPIT_HOST=localhost MAILPIT_PORT=1025 NODE_ENV=development npm start
+
+EXPECT:
+[v0] Successfully connected to PostgreSQL
+[v0] Database initialization completed successfully!
+Server running on port 5000
+
+================================================================================
+                    STEP 5: Frontend (React App)
+================================================================================
+
+PREREQUISITE:
+- Open another new terminal/command prompt
+- Navigate to: cd frontend
+
+INSTALLATION:
+npm install
+
+WINDOWS (PowerShell - One Line):
+$env:REACT_APP_API_URL="http://localhost:5000"; npm start
+
+WINDOWS (Command Prompt - One Line):
+set REACT_APP_API_URL=http://localhost:5000 && npm start
+
+LINUX/MAC (One Line):
+REACT_APP_API_URL=http://localhost:5000 npm start
+
+EXPECT:
+webpack compiled successfully
+On Your Network: http://xxx.xxx.xxx.xxx:3000
+
+================================================================================
+                    ACCESS YOUR APPLICATION
+================================================================================
+
+FRONTEND:
+URL: http://localhost:3000
+Type: Web Browser
+
+ADMIN LOGIN:
+URL: http://localhost:3000/admin-login
+Email: admin@skillconnect.com
+Password: admin123
+
+MINIO CONSOLE:
+URL: http://localhost:9001
+Username: minioadmin
+Password: minioadmin123
+
+EMAIL TESTING:
+URL: http://localhost:8025
+(View all emails sent by the app)
+
+API BACKEND:
+URL: http://localhost:5000/api
+Type: API Requests
+
+================================================================================
+                    DOCKER MANAGEMENT COMMANDS
+================================================================================
+
+CHECK ALL RUNNING CONTAINERS:
+docker ps
+
+VIEW CONTAINER LOGS:
+docker logs postgres
+docker logs minio
+docker logs mailpit
+
+STOP ALL CONTAINERS:
+docker stop postgres minio mailpit
+
+RESTART A CONTAINER:
+docker restart postgres
+
+REMOVE A CONTAINER:
+docker rm postgres
+
+CLEAN UP ALL:
+docker stop $(docker ps -q) && docker rm $(docker ps -aq)
+
+VIEW DOCKER DISK USAGE:
+docker system df
+
+REMOVE UNUSED DATA:
+docker system prune -a
+
+================================================================================
+                    PRODUCTION DEPLOYMENT
+================================================================================
+
+FOR PRODUCTION USE:
+docker-compose -f docker-compose.prod.yml up -d
+
+SETUP:
+1. Copy .env.example to .env
+2. Edit .env with production values:
+   - SENDPULSE_USER
+   - SENDPULSE_PASS
+   - ADMIN_PASSWORD
+   - CORS_ORIGIN
+   - etc.
+
+3. Run: docker-compose -f docker-compose.prod.yml up -d
+
+VIEW LOGS:
+docker-compose -f docker-compose.prod.yml logs -f backend
+
+STOP:
+docker-compose -f docker-compose.prod.yml down
+
+================================================================================
+                    TESTING THE APPLICATION
+================================================================================
+
+1. SIGN UP:
+   - Go to http://localhost:3000/signup
+   - Create account with test data
+   - Click "Create Account"
+
+2. LOGIN:
+   - Go to http://localhost:3000/login
+   - Use credentials from signup
+   - Click "Sign In"
+
+3. UPLOAD RESUME:
+   - Click "Home" tab
+   - Click "Upload Resume"
+   - Select PDF/DOC file
+   - View uploaded resume
+
+4. SEND MESSAGE:
+   - Click "Messages" tab
+   - Click "Find People"
+   - Search for users
+   - Click to start conversation
+   - Type message and send
+
+5. TEST SUBSCRIPTION:
+   - Create 6 conversations
+   - 6th conversation shows subscription popup
+   - Select plan and click "Continue"
+   - Upload payment screenshot
+   - Enter transaction ID
+   - Submit
+
+6. ADMIN APPROVAL:
+   - Login as admin
+   - Go to admin dashboard
+   - Find subscription requests
+   - Click approve/reject
+   - User gets email notification
+
+================================================================================
+                    TROUBLESHOOTING
+================================================================================
+
+POSTGRESQL WON'T CONNECT:
+✓ Check if postgres container is running: docker ps | grep postgres
+✓ Check logs: docker logs postgres
+✓ Verify credentials in .env
+✓ Try connecting directly:
+  - psql -h localhost -U admin -d skill_connect_db -W
+  - Password: admin123
+
+MINIO WON'T START:
+✓ Check if port 9000 is already in use
+✓ Use different port: docker run -p 9001:9000 -p 9002:9001 ...
+✓ Check logs: docker logs minio
+
+BACKEND CRASHES:
+✓ Check database is running: docker ps | grep postgres
+✓ View logs: docker logs (backend_container_id)
+✓ Verify env vars are correct
+✓ Check if port 5000 is in use
+
+FRONTEND WON'T CONNECT TO API:
+✓ Check backend is running on port 5000
+✓ Verify REACT_APP_API_URL is correct
+✓ Open browser console (F12) for errors
+✓ Check CORS settings in server.js
+
+MESSAGES NOT SENDING:
+✓ Check backend logs for errors
+✓ Verify user IDs are correct
+✓ Check database tables exist
+✓ Verify both users are in database
+
+================================================================================
+                    QUICK REFERENCE
+================================================================================
+
+Frontend: http://localhost:3000
+Backend API: http://localhost:5000/api
+MinIO: http://localhost:9001
+Email: http://localhost:8025
+
+Admin Email: admin@skillconnect.com
+Admin Password: admin123
+MinIO User: minioadmin
+MinIO Password: minioadmin123
+DB User: admin
+DB Password: admin123
+
+Database: skill_connect_db
+DB Host: localhost
+DB Port: 5432
+
+================================================================================
+                    BACKUP & RESTORE
+================================================================================
+
+BACKUP DATABASE:
+docker exec postgres pg_dump -U admin skill_connect_db > backup.sql
+
+RESTORE DATABASE:
+docker exec -i postgres psql -U admin skill_connect_db < backup.sql
+
+BACKUP MINIO DATA:
+docker cp minio:/data ./minio_backup
+
+================================================================================
+
+                    🎉 SETUP COMPLETE 🎉
+
+All systems ready! Open http://localhost:3000 and start using the platform!
+
+For support, check the error messages in terminal and docker logs.
+
+================================================================================

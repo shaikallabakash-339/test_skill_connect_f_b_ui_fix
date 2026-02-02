@@ -1,0 +1,262 @@
+================================================================================
+COPY & PASTE COMMANDS FOR WINDOWS
+================================================================================
+
+FIRST TIME SETUP (Run these in order)
+=====================================
+
+1. Clean everything:
+   docker-compose down -v && docker system prune -a -f && docker volume prune -f
+
+2. Build and start:
+   docker-compose up -d --build
+
+3. Wait 60 seconds, then check status:
+   docker-compose ps
+
+4. All containers should show "Up". If not, check logs:
+   docker-compose logs backend
+
+================================================================================
+
+QUICK TEST COMMANDS
+===================
+
+View all logs:
+   docker-compose logs -f
+
+View backend logs only:
+   docker-compose logs -f backend
+
+View frontend logs only:
+   docker-compose logs -f frontend
+
+View database logs only:
+   docker-compose logs -f postgres
+
+Check database has users table:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT * FROM users;"
+
+Check if user was created:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT email, fullname, status FROM users WHERE email='testuser@example.com';"
+
+Count total users:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT COUNT(*) FROM users;"
+
+================================================================================
+
+RESTART COMMANDS
+================
+
+Restart all services:
+   docker-compose restart
+
+Restart just backend:
+   docker-compose restart backend
+
+Restart just frontend:
+   docker-compose restart frontend
+
+Stop everything (keep data):
+   docker-compose down
+
+Start everything again:
+   docker-compose up -d
+
+Stop everything and remove data:
+   docker-compose down -v
+
+================================================================================
+
+TROUBLESHOOTING COMMANDS
+========================
+
+Kill process on port 5000 (backend):
+   netstat -ano | findstr :5000
+   (Note the PID, then run:)
+   taskkill /PID [PID] /F
+
+Kill process on port 3000 (frontend):
+   netstat -ano | findstr :3000
+   taskkill /PID [PID] /F
+
+Test backend is responding:
+   curl http://localhost:5000/health
+
+Test database connection:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT version();"
+
+View PostgreSQL connection info:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "\conninfo"
+
+================================================================================
+
+COMPLETE FRESH START
+====================
+
+Run this if everything is broken:
+
+   docker-compose down -v
+   docker system prune -a -f
+   docker volume prune -f
+   docker-compose up -d --build
+   timeout /t 60 /nobreak
+   docker-compose ps
+
+================================================================================
+
+ACCESSING SERVICES FROM WINDOWS BROWSER
+========================================
+
+Frontend (React App):
+   http://localhost:3000
+
+Backend API:
+   http://localhost:5000
+   Health check: http://localhost:5000/health
+
+PostgreSQL (from command line only):
+   docker-compose exec postgres psql -U admin -d skill_connect_db
+
+MinIO (File Storage):
+   http://localhost:9001
+   Username: minioadmin
+   Password: minioadmin123
+
+Mailpit (Email Testing):
+   http://localhost:8025
+
+================================================================================
+
+WHAT TO DO WHEN YOU GET "Cannot connect to server" ERROR
+==========================================================
+
+Step 1: Check if backend is running
+   docker-compose ps backend
+   (Should show "Up")
+
+Step 2: Check backend logs
+   docker-compose logs backend
+   (Look for any error messages)
+
+Step 3: Restart backend
+   docker-compose restart backend
+   (Wait 5 seconds)
+
+Step 4: Try signup again in browser
+   Go to http://localhost:3000
+   Try signing up
+
+Step 5: If still fails, check logs again
+   docker-compose logs -f backend
+
+Step 6: If everything fails, do complete reset
+   docker-compose down -v
+   docker-compose up -d --build
+   Wait 60 seconds
+   Try again
+
+================================================================================
+
+DATABASE TESTING
+================
+
+Insert test user manually:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "INSERT INTO users (email, fullname, password, status) VALUES ('test@test.com', 'Test User', 'hashedpassword', 'pursuing');"
+
+View all users:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "SELECT email, fullname, status, created_at FROM users;"
+
+Delete all users (reset):
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "DELETE FROM users;"
+
+View table structure:
+   docker-compose exec postgres psql -U admin -d skill_connect_db -c "\d users"
+
+================================================================================
+
+DOCKER COMPOSE FILE PATH CHECK
+===============================
+
+Make sure you're in project root directory that contains docker-compose.yml
+
+Show current directory:
+   cd
+
+List files in current directory:
+   dir
+
+If docker-compose.yml is not there, navigate to it:
+   cd path\to\skill-connect
+
+Then verify:
+   dir docker-compose.yml
+
+================================================================================
+
+AFTER STARTUP VERIFICATION
+===========================
+
+1. Check Docker status:
+   docker ps
+
+2. Check all containers:
+   docker-compose ps
+
+3. Check API is working:
+   curl http://localhost:3000 (should load frontend HTML)
+   curl http://localhost:5000/health (should return {"status":"OK"})
+
+4. Go to browser and test:
+   http://localhost:3000 → should load signup page
+   http://localhost:8025 → should load Mailpit
+   http://localhost:9001 → should load MinIO
+
+5. Test signup flow:
+   Fill form → Click "Create Account" → Should see green toast → Should redirect to login
+
+If any step fails, get logs:
+   docker-compose logs [service-name]
+
+================================================================================
+
+MOST COMMON ISSUE & SOLUTION
+=============================
+
+ISSUE: "Cannot connect to server. Please check your connection."
+when trying to signup/login
+
+ROOT CAUSE: Frontend (browser) cannot reach Backend API at http://localhost:5000
+
+SOLUTION: 
+1. Check backend is running:
+   docker-compose ps backend
+
+2. Check backend logs:
+   docker-compose logs backend
+
+3. Restart backend:
+   docker-compose restart backend
+
+4. Wait 5 seconds and try signup again
+
+5. If still fails, complete reset:
+   docker-compose down -v
+   docker-compose up -d --build
+   Wait 60 seconds
+   Try again
+
+================================================================================
+
+REMEMBER
+========
+
+- Frontend URL: http://localhost:3000 (always localhost, not container name)
+- Backend URL: http://localhost:5000 (always localhost, not container name)
+- Database: http://localhost:5432 (always localhost for external access)
+- Mailpit: http://localhost:8025 (always localhost)
+- MinIO: http://localhost:9001 (always localhost)
+
+All ports are on your Windows machine (localhost), NOT the Docker container names!
+
+================================================================================

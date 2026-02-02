@@ -1,0 +1,225 @@
+================================================================================
+                    SKILL CONNECT - QUICK START GUIDE
+================================================================================
+
+⚡ FASTEST START (Choose One):
+
+  Windows:  Double-click start.bat
+  Linux:    chmod +x start.sh && ./start.sh
+  Mac:      chmod +x start.sh && ./start.sh
+  Manual:   docker-compose up -d
+
+================================================================================
+                            WHAT'S RUNNING?
+================================================================================
+
+After starting (wait 30 seconds):
+
+  Frontend      http://localhost:3000
+  Backend       http://localhost:5000
+  MinIO (Files) http://localhost:9001
+  Email Test    http://localhost:8025
+  Database      localhost:5432
+
+================================================================================
+                         LOGIN CREDENTIALS
+================================================================================
+
+User Signup:
+  1. Go to http://localhost:3000
+  2. Click "Sign Up"
+  3. Create your account
+  4. Login
+
+Admin Login:
+  Email:    admin@skillconnect.com
+  Password: admin123
+
+MinIO (File Storage):
+  Username: minioadmin
+  Password: minioadmin123
+
+Database:
+  User:     admin
+  Password: admin123
+
+================================================================================
+                           USEFUL COMMANDS
+================================================================================
+
+View Logs:
+  docker-compose logs -f
+
+Stop Services:
+  docker-compose down
+
+Start Services:
+  docker-compose up -d
+
+Check Status:
+  docker-compose ps
+
+Health Check:
+  ./health-check.sh
+
+Database Access:
+  docker-compose exec postgres psql -U admin -d skill_connect_db
+
+================================================================================
+                         KEY FEATURES TO TEST
+================================================================================
+
+✓ Sign up with your email
+✓ Edit profile
+✓ Upload resume (PDF/DOCX)
+✓ Search for other users
+✓ Send real-time messages (5 conversations max free)
+✓ View admin notifications
+✓ Admin: Send bulk messages
+✓ Admin: View analytics
+✓ Donate to orphan homes or old-age homes
+✓ Check emails at http://localhost:8025
+
+================================================================================
+                          TROUBLESHOOTING
+================================================================================
+
+Docker won't start?
+  docker-compose down
+  docker-compose build --no-cache
+  docker-compose up -d
+
+Frontend not connecting?
+  docker-compose logs backend
+  curl http://localhost:5000/health
+
+Database issues?
+  docker-compose restart postgres
+  docker-compose logs postgres
+
+Clear everything and restart:
+  docker-compose down -v
+  docker-compose up -d
+
+================================================================================
+                         FOLDER STRUCTURE
+================================================================================
+
+Your app folder should contain:
+  ├── backend/              (Node.js backend)
+  ├── frontend/             (React frontend)
+  ├── docker-compose.yml
+  ├── Dockerfile
+  ├── Dockerfile.frontend
+  ├── .env                  (create from .env.example)
+  ├── start.sh
+  └── start.bat
+
+================================================================================
+                         ENVIRONMENT SETUP
+================================================================================
+
+1. Copy environment file:
+   cp .env.example .env
+
+2. Update .env with your settings (optional):
+   - SendPulse email credentials (for production)
+   - Admin password (for security)
+   - Database credentials (if you want to change)
+
+3. Start services:
+   docker-compose up -d
+
+4. Wait 30 seconds and access:
+   http://localhost:3000
+
+================================================================================
+                          NEXT STEPS
+================================================================================
+
+1. Start the app (choose fastest option above)
+2. Wait 30 seconds for all services to be ready
+3. Open http://localhost:3000 in your browser
+4. Sign up for a user account
+5. Create another account to test messaging
+6. Try admin login: admin@skillconnect.com / admin123
+7. Test sending bulk messages
+8. Upload a resume
+9. Search and message users
+10. Check email at http://localhost:8025
+
+================================================================================
+                           DOCUMENTATION
+================================================================================
+
+For detailed information, see:
+  README.md          - Project overview and features
+  SETUP.md           - Detailed setup instructions
+  DEPLOYMENT.md      - Deployment and troubleshooting
+  ERROR_FIXES.md     - Error solutions
+  COMPLETION_SUMMARY.md - What was built
+
+================================================================================
+                      EMAIL TESTING (Mailpit)
+================================================================================
+
+1. Go to http://localhost:8025
+2. No login needed
+3. All emails sent during development appear here
+4. Perfect for testing without spam risk
+5. View email content, headers, attachments
+
+================================================================================
+                      MINIO FILE STORAGE
+================================================================================
+
+1. Go to http://localhost:9001
+2. Login: minioadmin / minioadmin123
+3. Create buckets for different file types
+4. View uploaded resumes and documents
+5. Manage file permissions
+
+================================================================================
+                       PRODUCTION NOTES
+================================================================================
+
+Before deploying to production:
+  □ Change admin password in .env
+  □ Add SendPulse credentials
+  □ Change database password
+  □ Set NODE_ENV=production
+  □ Enable HTTPS
+  □ Setup database backups
+  □ Configure domain names
+
+================================================================================
+                        SUPPORT & HELP
+================================================================================
+
+Check logs:
+  docker-compose logs -f
+
+Run health check:
+  ./health-check.sh
+
+Read documentation:
+  cat README.md
+  cat SETUP.md
+  cat ERROR_FIXES.md
+
+Reset database:
+  docker-compose down -v
+  docker-compose up -d
+
+================================================================================
+                      YOU'RE ALL SET! 🚀
+================================================================================
+
+Your Skill Connect application is ready to run!
+
+Start with: ./start.sh (or start.bat on Windows)
+Access at: http://localhost:3000
+
+Questions? Check the documentation files included in this project.
+
+================================================================================
