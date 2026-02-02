@@ -680,6 +680,5 @@ const Orphans = () => {
     </div>
   );
 };
-};
 
 export default Orphans;

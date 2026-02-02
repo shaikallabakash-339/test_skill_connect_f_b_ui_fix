@@ -412,24 +412,6 @@ function AdminDashboard() {
     }
   };
 
-  const handleSendAnnouncement = async () => {
-    if (!announcement.title || !announcement.message) {
-      alert('Please fill both title and message');
-      return;
-    }
-
-    try {
-      const res = await axios.post(`${apiUrl}/api/send-announcement`, announcement);
-      if (res.data.success) {
-        alert('Announcement sent successfully!');
-        setAnnouncement({ title: '', message: '' });
-      }
-    } catch (err) {
-      console.error('Error sending announcement:', err);
-      alert('Failed to send announcement');
-    }
-  };
-
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 

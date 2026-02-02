@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Home, MessageSquare, Bell, LogOut, Search, Send, Upload, FileText, Trash2,
-  ChevronDown, Settings, User, Users, Zap, Lock, CreditCard, X, Camera,
-  Menu, AlertCircle, Download, Plus, Clock, Mail, Phone, MapPin, Briefcase,
-  Edit2, Save, Eye
+  ChevronDown, Settings, User, Zap, X, Camera,
+  Menu
 } from 'lucide-react';
 import { showToast } from '../utils/toast';
 import '../styles/user-dashboard-new.css';
@@ -30,7 +29,6 @@ function UserDashboard() {
   const [allUsers, setAllUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [userSearchType, setUserSearchType] = useState('name');
   const [profileUpdateMode, setProfileUpdateMode] = useState(false);
   const [updatedProfile, setUpdatedProfile] = useState({});
   const [topCompanies, setTopCompanies] = useState([]);
@@ -60,12 +58,7 @@ function UserDashboard() {
   const [photoUploading, setPhotoUploading] = useState(false);
 
   // Premium Modal State
-  const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [qrCode, setQrCode] = useState('');
-  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
-  const [screenshotUploading, setScreenshotUploading] = useState(false);
-  const [messageFilter, setMessageFilter] = useState('all');
-  const [filteredMessages, setFilteredMessages] = useState([]);
+  const [showPremiumWarning, setShowPremiumWarning] = useState(false);
 
   const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -102,6 +95,7 @@ function UserDashboard() {
     }, 2000);
 
     return () => clearInterval(messageInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, selectedUser]);
 
   const fetchUserProfile = useCallback(async (userData) => {
@@ -138,6 +132,7 @@ function UserDashboard() {
     if (user && allUsers.length === 0) {
       fetchAllUsers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Search and filter users
@@ -149,15 +144,10 @@ function UserDashboard() {
 
     const query = searchQuery.toLowerCase();
     const filtered = allUsers.filter(u => {
-      if (userSearchType === 'name') {
-        return u.fullname?.toLowerCase().includes(query);
-      } else if (userSearchType === 'company') {
-        return u.company_name?.toLowerCase().includes(query);
-      }
-      return false;
+      return u.fullname?.toLowerCase().includes(query);
     });
     setFilteredUsers(filtered);
-  }, [searchQuery, userSearchType, allUsers]);
+  }, [searchQuery, allUsers]);
 
   // Search for people and companies in messages
   useEffect(() => {
