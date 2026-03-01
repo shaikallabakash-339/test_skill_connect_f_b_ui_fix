@@ -1,7 +1,7 @@
 services:
   # -------- POSTGRES DATABASE --------
   postgres:
-    image: postgres:15-alpine
+    image: postgres:15
     container_name: skill_connect_postgres
     restart: unless-stopped
     environment:
