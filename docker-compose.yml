@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123
     ports:
-      - "5432:5432"
+      - "5432:5433"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backend/scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
@@ -72,7 +72,7 @@ services:
       mailpit:
         condition: service_healthy
     ports:
-      - "5000:5000"
+      - "5000:5001"
     environment:
       # App Config
       NODE_ENV: production
@@ -130,9 +130,9 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "3000:3001"
     environment:
-      REACT_APP_API_URL: http://localhost:5000
+      REACT_APP_API_URL: http://localhost:5001
       REACT_APP_ENV: production
       NODE_ENV: production
     networks:
