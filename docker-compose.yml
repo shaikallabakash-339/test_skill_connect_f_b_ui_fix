@@ -72,15 +72,15 @@ services:
       mailpit:
         condition: service_healthy
     ports:
-      - "5000:5001"
+      - "5001:5001"
     environment:
       # App Config
       NODE_ENV: production
-      PORT: 5000
+      PORT: 5001
       
       # Database Configuration
       DB_HOST: postgres
-      DB_PORT: 5432
+      DB_PORT: 5433
       DB_USER: postgres
       DB_PASSWORD: postgres123
       DB_NAME: skill_connect
@@ -130,7 +130,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "3000:3001"
+      - "3001:3001"
     environment:
       REACT_APP_API_URL: http://localhost:5001
       REACT_APP_ENV: production
